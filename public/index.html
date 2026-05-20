@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prospector AI — High-Ticket Client Acquisition Engine</title>
+  <!-- Outfit Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Floating Background Blobs -->
+  <div class="blob blob-purple"></div>
+  <div class="blob blob-blue"></div>
+
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="dashboard-header">
+      <div class="brand">
+        <span class="logo-icon">🎯</span>
+        <h1>Prospector <span class="gradient-text">AI</span></h1>
+      </div>
+      <p class="tagline">Convert High-Intent Local Leads to High-Paying Website Clients for $0 Cost</p>
+    </header>
+
+    <!-- Quick-Start Funnel Guide -->
+    <div class="funnel-guide glass-card">
+      <div class="guide-step">
+        <span class="step-circle">1</span>
+        <div class="guide-step-content">
+          <strong class="guide-step-title">Harvest Leads</strong>
+          Search local niches & cities
+        </div>
+      </div>
+      <div class="guide-arrow">&rarr;</div>
+      <div class="guide-step">
+        <span class="step-circle">2</span>
+        <div class="guide-step-content">
+          <strong class="guide-step-title">Select & Analyze</strong>
+          Review missing website links
+        </div>
+      </div>
+      <div class="guide-arrow">&rarr;</div>
+      <div class="guide-step">
+        <span class="step-circle">3</span>
+        <div class="guide-step-content">
+          <strong class="guide-step-title">Pitch with Gemini</strong>
+          Draft and send outreach
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <div class="dashboard-grid">
+
+      <!-- Left Column: Search & Harvest Console -->
+      <section class="console-card glass-card">
+        <h2 class="section-title">
+          <span class="badge step-badge">Step 1</span>
+          Search Console
+        </h2>
+        <p class="section-desc">Search Google's global index for active creators/businesses with no website or broken links.</p>
+
+        <!-- Clickable Niche Industry Suggestion Chips -->
+        <div class="niche-chips-container">
+          <span class="chips-label">Select Industry Preset:</span>
+          <div class="niche-chips">
+            <span class="niche-chip" data-niche="boutique">🛍️ Boutique</span>
+            <span class="niche-chip" data-niche="spa">💆 Spa & Beauty</span>
+            <span class="niche-chip" data-niche="dentist">🦷 Dentist</span>
+            <span class="niche-chip" data-niche="gym">💪 Gym & Fitness</span>
+            <span class="niche-chip" data-niche="plumber">🔧 Plumber/Handyman</span>
+            <span class="niche-chip" data-niche="restaurant">🍔 Restaurant</span>
+            <span class="niche-chip" data-niche="lawyer">⚖️ Law Firm</span>
+            <span class="niche-chip" data-niche="builder">🏠 Home Builder</span>
+          </div>
+        </div>
+
+        <form id="search-form" class="search-form">
+          <div class="form-group">
+            <label for="niche">Business Niche / Category</label>
+            <input type="text" id="niche" placeholder="e.g. boutique, spa, dentist, gym" required>
+          </div>
+
+          <div class="form-group">
+            <label for="location">Target Location (City / State)</label>
+            <input type="text" id="location" placeholder="e.g. Lekki, New York, London" required>
+          </div>
+
+          <div class="form-group">
+            <label for="platform">Lead Source Platform</label>
+            <select id="platform">
+              <option value="Instagram">Instagram Pages (Free Crawler)</option>
+              <option value="TikTok">TikTok Profiles (Free Crawler)</option>
+              <option value="Facebook">Facebook Business Pages</option>
+              <option value="Yelp">Yelp Local Listings</option>
+              <option value="LinkedIn">LinkedIn Company Pages</option>
+              <option value="TripAdvisor">TripAdvisor Listings</option>
+              <option value="Google Maps">General Google Listings</option>
+            </select>
+          </div>
+
+          <button type="submit" id="harvest-btn" class="btn-primary">
+            <span class="btn-icon">⚡</span> Run Free Search
+          </button>
+        </form>
+
+        <div id="harvest-status" class="harvest-status hidden">
+          <div class="loader"></div>
+          <span id="status-text">Crawling Google's index...</span>
+        </div>
+      </section>
+
+      <!-- Middle Column: Leads Directory -->
+      <section class="leads-card glass-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">
+              <span class="badge step-badge">Step 2</span>
+              Prospects Directory
+            </h2>
+            <p class="section-desc">Real-time local leads qualified as having high ratings but poor/missing websites.</p>
+          </div>
+          <span id="lead-count" class="badge">0 Leads</span>
+        </div>
+
+        <div class="lead-filters">
+          <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="scraped">Scraped</button>
+          <button class="filter-tab" data-filter="pitch-ready">Ready to Pitch</button>
+          <button class="filter-tab" data-filter="contacted">Pitched</button>
+        </div>
+
+        <div id="leads-list" class="leads-list">
+          <!-- Lead list generated dynamically via app.js -->
+          <div class="empty-state">
+            <span class="empty-icon">📭</span>
+            <h3>No Prospects Found Yet</h3>
+            <p>Fill out the Search Console in Step 1 to harvest high-ticket leads in any city globally for free!</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Gemini Pitch & Outreach Studio -->
+      <section class="studio-card glass-card">
+        <h2 class="section-title">
+          <span class="badge step-badge">Step 3</span>
+          Gemini Outreach Studio
+        </h2>
+        <p class="section-desc">Auto-generate a highly tailored sales audit and WhatsApp pitch targeting their specific reviews and bottlenecks.</p>
+
+        <div id="pitch-container" class="pitch-container empty-pitch">
+          <div class="empty-state">
+            <span class="empty-icon">✨</span>
+            <h3>No Prospect Selected</h3>
+            <p>Select any lead from the directory in Step 2 to analyze their profile and generate an unstoppable pitch with Gemini.</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
