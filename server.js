@@ -6,6 +6,8 @@ const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const Lead = require('./models/Lead');
+const JobLead = require('./models/JobLead');
+const SystemConfig = require('./models/SystemConfig');
 
 const app = express();
 const PORT = process.env.PORT || 9000;
@@ -17,7 +19,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Database Connection
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('🚀 Connected to MongoDB Atlas successfully!'))
+    .then(() => {
+      console.log('🚀 Connected to MongoDB Atlas successfully!');
+      // Initialize background agent state from DB
+      const { initAutopilotOnStartup } = require('./services/autopilot');
+      initAutopilotOnStartup();
+    })
     .catch(err => console.error('❌ MongoDB Atlas connection failure:', err));
 } else {
   console.warn('⚠️ WARNING: MONGO_URI is missing in .env. Database will not persist leads.');
@@ -442,6 +449,98 @@ app.delete('/api/leads/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Lead not found.' });
     }
     res.json({ success: true, message: 'Lead deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// AUTOPILOT & JOB FINDER API ROUTES
+// ==========================================
+
+// GET AUTOPILOT AGENT STATUS
+app.get('/api/agent/status', async (req, res) => {
+  try {
+    const config = await SystemConfig.findOne({ key: 'autopilot_active' });
+    const isActive = config ? config.value === true : false;
+    res.json({ success: true, active: isActive });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// TOGGLE AUTOPILOT AGENT ON/OFF
+app.post('/api/agent/toggle', async (req, res) => {
+  const { startAgent, stopAgent } = require('./services/autopilot');
+  try {
+    let config = await SystemConfig.findOne({ key: 'autopilot_active' });
+    if (!config) {
+      config = new SystemConfig({ key: 'autopilot_active', value: false });
+    }
+
+    // Toggle value
+    config.value = !config.value;
+    config.updatedAt = Date.now();
+    await config.save();
+
+    if (config.value === true) {
+      startAgent();
+      res.json({ success: true, active: true, message: 'Autopilot Agent activated successfully!' });
+    } else {
+      stopAgent();
+      res.json({ success: true, active: false, message: 'Autopilot Agent deactivated successfully.' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// MANUAL TEST TRIGGER FOR REDDIT SCANS
+app.get('/api/agent/test-scan', async (req, res) => {
+  const { runAllScans } = require('./services/autopilot');
+  try {
+    console.log('⚡ Manual scan triggered via API.');
+    await runAllScans();
+    res.json({ success: true, message: 'Manual Reddit scan completed! Check server logs or Telegram.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET ALL JOB GIG LEADS
+app.get('/api/jobs', async (req, res) => {
+  try {
+    const jobs = await JobLead.find({ status: { $ne: 'closed' } }).sort({ createdAt: -1 });
+    res.json({ success: true, count: jobs.length, data: jobs });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// UPDATE JOB LEAD STATUS
+app.put('/api/jobs/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  try {
+    const job = await JobLead.findByIdAndUpdate(id, { status }, { new: true });
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Job lead not found.' });
+    }
+    res.json({ success: true, data: job });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE JOB LEAD
+app.delete('/api/jobs/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const job = await JobLead.findByIdAndDelete(id);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Job lead not found.' });
+    }
+    res.json({ success: true, message: 'Job lead deleted successfully.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

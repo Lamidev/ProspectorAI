@@ -2,6 +2,9 @@
 // PROSPECTOR AI — FRONTEND APP CONTROLLER
 // ==========================================================================
 
+// ==========================================
+// B2B LEAD FINDER STATE
+// ==========================================
 let leads = [];
 let selectedLead = null;
 let currentFilter = 'all';
@@ -305,6 +308,7 @@ function renderLeadsList() {
           </div>
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+          <button class="list-delete-btn" onclick="event.stopPropagation(); deleteProspect('${lead._id}')" title="Delete Prospect">🗑️</button>
           <span class="status-pill status-${lead.status}">${lead.status.replace('-', ' ')}</span>
           <span class="score-badge ${scoreClass}">${lead.qualityScore || 0}% Score</span>
         </div>
@@ -665,9 +669,12 @@ async function updateLeadStatus(id, newStatus) {
 
 // Delete Lead from DB
 async function deleteProspect(id) {
+  const targetLead = leads.find(l => l._id === id);
+  const nameToDisplay = targetLead ? targetLead.name : 'this prospect';
+
   const confirmDelete = await showConfirm(
     'Delete Prospect',
-    `Are you sure you want to permanently delete "${selectedLead.name}" from your lead database?`,
+    `Are you sure you want to permanently delete "${nameToDisplay}" from your lead database?`,
     {
       confirmText: 'Delete Lead',
       cancelText: 'Cancel',
@@ -684,9 +691,11 @@ async function deleteProspect(id) {
     
     if (data.success) {
       leads = leads.filter(l => l._id !== id);
-      selectedLead = null;
+      if (selectedLead && selectedLead._id === id) {
+        selectedLead = null;
+        renderPitchStudio();
+      }
       renderLeadsList();
-      renderPitchStudio();
       showToast('Prospect successfully deleted from lead database.', 'success');
     } else {
       throw new Error(data.message);
@@ -696,3 +705,461 @@ async function deleteProspect(id) {
     showToast('Failed to delete prospect from database.', 'error');
   }
 }
+
+// ==========================================================================
+// GIG FINDER & AUTOPILOT MODULE
+// ==========================================================================
+
+// ==========================================
+// GIG FINDER STATE
+// ==========================================
+let jobs = [];
+let selectedJob = null;
+let currentJobFilter = 'all';
+let currentMode = 'b2b'; // 'b2b' | 'gigs'
+
+// ==========================================
+// MODE SWITCHER
+// ==========================================
+
+function switchMode(mode) {
+  currentMode = mode;
+
+  const b2bConsole   = document.getElementById('b2b-console');
+  const gigsConsole  = document.getElementById('gigs-console');
+  const leadsList    = document.getElementById('leads-list');
+  const jobsList     = document.getElementById('jobs-list');
+  const b2bFilters   = document.getElementById('b2b-filters');
+  const gigsFilters  = document.getElementById('gigs-filters');
+  const modeB2b      = document.getElementById('mode-b2b');
+  const modeGigs     = document.getElementById('mode-gigs');
+  const dirDesc      = document.getElementById('directory-desc');
+  const studioDesc   = document.getElementById('studio-desc');
+
+  if (mode === 'gigs') {
+    b2bConsole.classList.add('hidden');
+    gigsConsole.classList.remove('hidden');
+    leadsList.classList.add('hidden');
+    jobsList.classList.remove('hidden');
+    b2bFilters.classList.add('hidden');
+    gigsFilters.classList.remove('hidden');
+    modeB2b.classList.remove('active');
+    modeGigs.classList.add('active');
+    dirDesc.textContent = 'Live Reddit & social media posts actively seeking software developers right now.';
+    studioDesc.textContent = 'Review the job description and send your AI-drafted proposal directly to the client.';
+    fetchJobs();
+  } else {
+    gigsConsole.classList.add('hidden');
+    b2bConsole.classList.remove('hidden');
+    jobsList.classList.add('hidden');
+    leadsList.classList.remove('hidden');
+    gigsFilters.classList.add('hidden');
+    b2bFilters.classList.remove('hidden');
+    modeGigs.classList.remove('active');
+    modeB2b.classList.add('active');
+    dirDesc.textContent = 'Real-time local leads qualified as having high ratings but poor/missing websites.';
+    studioDesc.textContent = 'Auto-generate a highly tailored sales audit and WhatsApp pitch targeting their specific reviews and bottlenecks.';
+    // Reset pitch studio to B2B state
+    selectedJob = null;
+    renderPitchStudio();
+  }
+}
+
+// ==========================================
+// AUTOPILOT TOGGLE
+// ==========================================
+
+async function fetchAutopilotStatus() {
+  try {
+    const res = await fetch('/api/agent/status');
+    const data = await res.json();
+    if (data.success) {
+      setToggleUI(data.active);
+    }
+  } catch (err) {
+    console.error('Failed to fetch autopilot status:', err);
+  }
+}
+
+function setToggleUI(isActive) {
+  const toggle    = document.getElementById('autopilot-toggle');
+  const dot       = document.querySelector('.autopilot-status-dot');
+  const statusTxt = document.querySelector('.autopilot-status-text');
+
+  if (!toggle) return;
+  toggle.checked = isActive;
+
+  if (isActive) {
+    dot.classList.add('active');
+    statusTxt.innerHTML = 'Autopilot Agent: <strong style="color: #10B981;">ON</strong>';
+    appendLog('🚀 Autopilot Agent is active — scanning Reddit every 15 mins...');
+  } else {
+    dot.classList.remove('active');
+    statusTxt.innerHTML = 'Autopilot Agent: <strong>OFF</strong>';
+    appendLog('🛑 Autopilot Agent stopped. Toggle ON to resume background scanning.');
+  }
+}
+
+async function handleToggle() {
+  try {
+    const res  = await fetch('/api/agent/toggle', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      setToggleUI(data.active);
+      showToast(data.message, data.active ? 'success' : 'warning');
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (err) {
+    console.error('Toggle failed:', err);
+    showToast('Failed to toggle Autopilot Agent. Check server connection.', 'error');
+  }
+}
+
+// ==========================================
+// AGENT LOGS CONSOLE
+// ==========================================
+
+function appendLog(message) {
+  const logsEl = document.getElementById('agent-logs');
+  if (!logsEl) return;
+  const timestamp = new Date().toLocaleTimeString();
+  logsEl.textContent += `\n[${timestamp}] ${message}`;
+  logsEl.scrollTop = logsEl.scrollHeight;
+}
+
+// ==========================================
+// MANUAL SCAN TRIGGER
+// ==========================================
+
+async function runManualScan() {
+  const btn = document.getElementById('manual-scan-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Scanning Reddit...';
+  }
+  appendLog('⚡ Manual scan triggered — checking r/forhire, r/freelance_forhire, r/jobbit...');
+
+  try {
+    const res  = await fetch('/api/agent/test-scan');
+    const data = await res.json();
+    if (data.success) {
+      appendLog('✅ Scan complete! Check Telegram for any new HOT leads.');
+      showToast('Manual Reddit scan complete! Check your Telegram for new leads.', 'success');
+      await fetchJobs();
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (err) {
+    appendLog(`❌ Scan failed: ${err.message}`);
+    showToast(err.message || 'Manual scan failed. Check server logs.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🔄 Run Manual Scan Now';
+    }
+  }
+}
+
+// ==========================================
+// JOB LEADS FETCHER & RENDERER
+// ==========================================
+
+async function fetchJobs() {
+  try {
+    const res  = await fetch('/api/jobs');
+    const data = await res.json();
+    if (data.success) {
+      jobs = data.data;
+      renderJobsList();
+      updateGigStats();
+    }
+  } catch (err) {
+    console.error('Failed to fetch job leads:', err);
+  }
+}
+
+function updateGigStats() {
+  const totalEl   = document.getElementById('total-gigs-count');
+  const appliedEl = document.getElementById('total-applied-count');
+  if (totalEl)   totalEl.textContent   = jobs.length;
+  if (appliedEl) appliedEl.textContent = jobs.filter(j => j.status === 'applied').length;
+}
+
+function renderJobsList() {
+  const jobsList = document.getElementById('jobs-list');
+  if (!jobsList) return;
+
+  let filtered = jobs;
+  if (currentJobFilter !== 'all') {
+    filtered = jobs.filter(j => j.status === currentJobFilter);
+  }
+
+  const leadCount = document.getElementById('lead-count');
+  if (leadCount) leadCount.textContent = `${filtered.length} Gigs`;
+
+  if (filtered.length === 0) {
+    jobsList.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">💼</span>
+        <h3>No Gigs Found Yet</h3>
+        <p>Turn on the Autopilot Agent or run a manual scan to harvest freelance development leads!</p>
+      </div>
+    `;
+    return;
+  }
+
+  jobsList.innerHTML = filtered.map(job => {
+    const isActive     = selectedJob && selectedJob._id === job._id ? 'active' : '';
+    
+    // Support specific subreddits or microchannels
+    const platformStr  = job.platform || '';
+    const platformClass = platformStr.startsWith('Reddit') ? 'reddit' : platformStr.startsWith('Twitter') ? 'twitter' : 'linkedin';
+
+    let platformIcon = '📡';
+    if (platformStr.startsWith('Reddit'))    platformIcon = '🟠';
+    if (platformStr.startsWith('Twitter'))   platformIcon = '🐦';
+    if (platformStr.startsWith('LinkedIn'))  platformIcon = '💼';
+
+    const skillTags = (job.requiredSkills || []).slice(0, 3).map(s =>
+      `<span style="background: rgba(79,70,229,0.08); color: var(--primary); padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 800;">${s}</span>`
+    ).join('');
+
+    const statusClass = job.status === 'applied' ? 'status-closed' : 'status-pitch-ready';
+    const statusLabel = job.status === 'applied' ? '✅ Applied' : '🔥 Unapplied';
+
+    // Show the actual post date, fallback to scraping date
+    const postDate = job.postCreatedAt ? new Date(job.postCreatedAt) : new Date(job.createdAt);
+    const dateStr  = postDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+    return `
+      <div class="lead-item ${isActive} ${platformClass}" onclick="selectJob('${job._id}')">
+        <div class="lead-info" style="flex: 1; min-width: 0;">
+          <h3 class="lead-name" style="font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">${job.title}</h3>
+          <div class="lead-meta" style="margin-top: 4px;">
+            <span class="lead-platform" title="${job.platform}">${platformIcon} ${job.platform}</span>
+            <span style="color: var(--success); font-weight: 700; font-size: 0.78rem;">💰 ${job.budget}</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">${skillTags}</div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;">
+          <button class="list-delete-btn" onclick="event.stopPropagation(); deleteJob('${job._id}')" title="Delete Gig">🗑️</button>
+          <span class="status-pill ${statusClass}">${statusLabel}</span>
+          <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;" title="Post Date">${dateStr}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==========================================
+// JOB LEAD SELECTION → PITCH STUDIO
+// ==========================================
+
+function selectJob(id) {
+  selectedJob = jobs.find(j => j._id === id);
+  renderJobsList();
+  renderJobStudio();
+}
+
+function renderJobStudio() {
+  const pitchContainer = document.getElementById('pitch-container');
+  if (!selectedJob) {
+    pitchContainer.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">💼</span>
+        <h3>No Gig Selected</h3>
+        <p>Select any job lead from the directory to view the AI-drafted proposal and send your pitch.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const job = selectedJob;
+
+  const skillBadges = (job.requiredSkills || []).map(s =>
+    `<span class="bottleneck-tag" style="background: rgba(79,70,229,0.06); color: var(--primary); border-color: rgba(79,70,229,0.12);">🛠️ ${s}</span>`
+  ).join('') || '<span class="bottleneck-tag success">General Development</span>';
+
+  let proposalHTML = '';
+  if (job.customProposal) {
+    proposalHTML = `
+      <div class="pitch-textbox" id="gig-proposal-text">${job.customProposal}</div>
+      <div class="pitch-actions">
+        <button class="btn-secondary" onclick="copyJobProposal()">📋 Copy Proposal</button>
+        <button class="btn-secondary" onclick="openJobPost()" style="border-color: rgba(255,69,0,0.2); color: #FF4500;">🔗 Open Original Post</button>
+      </div>
+      ${job.status !== 'applied' ? `
+        <button class="btn-primary" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); box-shadow: 0 8px 20px -4px rgba(16,185,129,0.3);" onclick="markJobApplied('${job._id}')">
+          ✅ Mark as Applied
+        </button>
+      ` : `
+        <div style="text-align: center; padding: 14px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15); border-radius: 12px; font-size: 0.88rem; font-weight: 700; color: var(--success);">
+          ✅ You have already applied to this gig!
+        </div>
+      `}
+    `;
+  } else {
+    proposalHTML = `
+      <div class="empty-state" style="padding: 30px 0;">
+        <span class="empty-icon">🤖</span>
+        <h3>No Proposal Generated</h3>
+        <p>This gig was flagged but has no proposal yet. Delete and re-scan to regenerate.</p>
+      </div>
+    `;
+  }
+
+  pitchContainer.className = 'pitch-container pitch-viewer';
+  pitchContainer.innerHTML = `
+    <div class="prospect-details">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <h3 style="font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3;">${job.title}</h3>
+          <a href="${job.postUrl}" target="_blank" style="color: var(--accent); font-size: 0.85rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; margin-top: 6px;">
+            🔗 View Original Post &rarr;
+          </a>
+          <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-top: 4px;">
+            📅 Posted: ${job.postCreatedAt ? new Date(job.postCreatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : new Date(job.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          </span>
+        </div>
+        <div style="text-align: right; flex-shrink: 0;">
+          <div style="font-size: 1.4rem; font-weight: 900; color: var(--success);">💰 ${job.budget}</div>
+          <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted);">${job.platform}</span>
+        </div>
+      </div>
+
+      <div class="audit-panel" style="margin-top: 14px;">
+        <h4 class="audit-title">🛠️ Required Skills & Technologies</h4>
+        <div class="bottleneck-list">${skillBadges}</div>
+      </div>
+
+      <div style="margin-top: 14px; background: rgba(255,255,255,0.5); border: 1px solid var(--surface-border); padding: 14px; border-radius: 12px; font-size: 0.82rem; color: var(--text-muted); max-height: 120px; overflow-y: auto;">
+        <strong style="color: var(--text); font-size: 0.85rem; display: block; margin-bottom: 6px;">📝 Post Content:</strong>
+        "${job.postContent ? job.postContent.substring(0, 400) + (job.postContent.length > 400 ? '...' : '') : 'No content available.'}"
+      </div>
+    </div>
+
+    ${proposalHTML}
+
+    <div class="pitch-lead-controls">
+      <div>
+        <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Gig Status:</label>
+        <select style="height: 36px; background: var(--surface); border: 1px solid var(--surface-border); border-radius: 8px; color: var(--text); font-family: var(--font); font-size: 0.8rem; font-weight: 600;" onchange="updateJobStatus('${job._id}', this.value)">
+          <option value="scraped"      ${job.status === 'scraped'        ? 'selected' : ''}>Scraped</option>
+          <option value="proposal-ready" ${job.status === 'proposal-ready' ? 'selected' : ''}>Proposal Ready</option>
+          <option value="applied"      ${job.status === 'applied'        ? 'selected' : ''}>Applied</option>
+          <option value="closed"       ${job.status === 'closed'         ? 'selected' : ''}>Closed</option>
+        </select>
+      </div>
+      <button class="delete-btn" onclick="deleteJob('${job._id}')">🗑️ Delete Gig</button>
+    </div>
+  `;
+}
+
+// ==========================================
+// JOB ACTIONS
+// ==========================================
+
+function copyJobProposal() {
+  const proposalEl = document.getElementById('gig-proposal-text');
+  if (!proposalEl) return;
+  navigator.clipboard.writeText(proposalEl.textContent)
+    .then(() => showToast('Proposal copied! Paste it into Reddit/LinkedIn DM and send 🚀', 'success'))
+    .catch(() => showToast('Failed to copy proposal text.', 'error'));
+}
+
+function openJobPost() {
+  if (!selectedJob || !selectedJob.postUrl) return;
+  window.open(selectedJob.postUrl, '_blank');
+}
+
+async function markJobApplied(id) {
+  await updateJobStatus(id, 'applied');
+  showToast('Marked as Applied! Great work — now go close that client! 💪', 'success');
+}
+
+async function updateJobStatus(id, newStatus) {
+  try {
+    const res  = await fetch(`/api/jobs/${id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const idx = jobs.findIndex(j => j._id === id);
+      if (idx !== -1) jobs[idx] = data.data;
+      selectedJob = data.data;
+      renderJobsList();
+      renderJobStudio();
+      updateGigStats();
+    }
+  } catch (err) {
+    console.error('Failed to update job status:', err);
+    showToast('Failed to update job status.', 'error');
+  }
+}
+
+async function deleteJob(id) {
+  const targetJob = jobs.find(j => j._id === id);
+  const titleToDisplay = targetJob ? targetJob.title : 'this gig';
+
+  const confirmDelete = await showConfirm(
+    'Delete Gig Lead',
+    `Are you sure you want to permanently delete "${titleToDisplay}" from your database?`,
+    { confirmText: 'Delete Gig', cancelText: 'Cancel', confirmColor: 'danger', icon: '🗑️' }
+  );
+  if (!confirmDelete) return;
+
+  try {
+    const res  = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      jobs       = jobs.filter(j => j._id !== id);
+      if (selectedJob && selectedJob._id === id) {
+        selectedJob = null;
+        renderJobStudio();
+      }
+      renderJobsList();
+      updateGigStats();
+      showToast('Gig lead deleted successfully.', 'success');
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (err) {
+    console.error('Failed to delete job:', err);
+    showToast('Failed to delete gig lead.', 'error');
+  }
+}
+
+// ==========================================
+// INIT — WIRE UP ALL GIG/AUTOPILOT EVENTS
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Mode tabs
+  document.getElementById('mode-b2b').addEventListener('click',  () => switchMode('b2b'));
+  document.getElementById('mode-gigs').addEventListener('click', () => switchMode('gigs'));
+
+  // Autopilot toggle
+  const toggle = document.getElementById('autopilot-toggle');
+  if (toggle) {
+    toggle.addEventListener('change', handleToggle);
+    fetchAutopilotStatus(); // Sync toggle state on load
+  }
+
+  // Manual scan button
+  const scanBtn = document.getElementById('manual-scan-btn');
+  if (scanBtn) scanBtn.addEventListener('click', runManualScan);
+
+  // Gig filter tabs
+  const gigFilterTabs = document.querySelectorAll('[data-job-filter]');
+  gigFilterTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      gigFilterTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentJobFilter = tab.getAttribute('data-job-filter');
+      renderJobsList();
+    });
+  });
+});

@@ -24,8 +24,26 @@
         <span class="logo-icon">🎯</span>
         <h1>Prospector <span class="gradient-text">AI</span></h1>
       </div>
-      <p class="tagline">Convert High-Intent Local Leads to High-Paying Website Clients for $0 Cost</p>
+      <p class="tagline">Convert High-Intent Local Leads & Freelance Developer Gigs to Cash for $0 Cost</p>
     </header>
+
+    <!-- Autopilot Control Panel -->
+    <div class="autopilot-panel glass-card">
+      <div class="mode-selector">
+        <button id="mode-b2b" class="mode-tab active">🎯 B2B Business Finder</button>
+        <button id="mode-gigs" class="mode-tab">💼 Developer Gig Finder</button>
+      </div>
+      <div class="autopilot-control">
+        <div class="autopilot-info">
+          <span class="autopilot-status-dot"></span>
+          <span class="autopilot-status-text">Autopilot Agent: <strong>OFF</strong></span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="autopilot-toggle">
+          <span class="slider round"></span>
+        </label>
+      </div>
+    </div>
 
     <!-- Quick-Start Funnel Guide -->
     <div class="funnel-guide glass-card">
@@ -33,7 +51,7 @@
         <span class="step-circle">1</span>
         <div class="guide-step-content">
           <strong class="guide-step-title">Harvest Leads</strong>
-          Search local niches & cities
+          Search local niches or run autopilot
         </div>
       </div>
       <div class="guide-arrow">&rarr;</div>
@@ -41,7 +59,7 @@
         <span class="step-circle">2</span>
         <div class="guide-step-content">
           <strong class="guide-step-title">Select & Analyze</strong>
-          Review missing website links
+          Review missing sites or gig postings
         </div>
       </div>
       <div class="guide-arrow">&rarr;</div>
@@ -49,7 +67,7 @@
         <span class="step-circle">3</span>
         <div class="guide-step-content">
           <strong class="guide-step-title">Pitch with Gemini</strong>
-          Draft and send outreach
+          Draft proposal and close client
         </div>
       </div>
     </div>
@@ -57,8 +75,8 @@
     <!-- Main Dashboard Grid -->
     <div class="dashboard-grid">
 
-      <!-- Left Column: Search & Harvest Console -->
-      <section class="console-card glass-card">
+      <!-- Left Column: Search & Harvest Console (B2B Mode) -->
+      <section class="console-card glass-card" id="b2b-console">
         <h2 class="section-title">
           <span class="badge step-badge">Step 1</span>
           Search Console
@@ -115,6 +133,39 @@
         </div>
       </section>
 
+      <!-- Left Column: Search & Harvest Console (Gig Finder Mode) -->
+      <section class="console-card glass-card hidden" id="gigs-console">
+        <h2 class="section-title">
+          <span class="badge step-badge">Agent</span>
+          Autopilot Console
+        </h2>
+        <p class="section-desc">The background agent checks Reddit subreddits and social channels 24/7 for people seeking web developers.</p>
+        
+        <div class="agent-stats-card">
+          <div class="stat-item">
+            <span class="stat-num" id="total-gigs-count">0</span>
+            <span class="stat-label">Gigs Scraped</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-num" id="total-applied-count">0</span>
+            <span class="stat-label">Applied Gigs</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <button id="manual-scan-btn" class="btn-primary" style="width: 100%;">
+            🔄 Run Manual Scan Now
+          </button>
+        </div>
+        
+        <div class="agent-log-box" style="margin-top: 20px;">
+          <h4 style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">🤖 Agent System Log:</h4>
+          <div id="agent-logs" class="logs-container">
+            Agent idle. Toggle Autopilot to begin background scans...
+          </div>
+        </div>
+      </section>
+
       <!-- Middle Column: Leads Directory -->
       <section class="leads-card glass-card">
         <div class="section-header">
@@ -123,24 +174,39 @@
               <span class="badge step-badge">Step 2</span>
               Prospects Directory
             </h2>
-            <p class="section-desc">Real-time local leads qualified as having high ratings but poor/missing websites.</p>
+            <p class="section-desc" id="directory-desc">Real-time local leads qualified as having high ratings but poor/missing websites.</p>
           </div>
           <span id="lead-count" class="badge">0 Leads</span>
         </div>
 
-        <div class="lead-filters">
+        <div class="lead-filters" id="b2b-filters">
           <button class="filter-tab active" data-filter="all">All</button>
           <button class="filter-tab" data-filter="scraped">Scraped</button>
           <button class="filter-tab" data-filter="pitch-ready">Ready to Pitch</button>
           <button class="filter-tab" data-filter="contacted">Pitched</button>
         </div>
 
+        <div class="lead-filters hidden" id="gigs-filters">
+          <button class="filter-tab active" data-job-filter="all">All</button>
+          <button class="filter-tab" data-job-filter="proposal-ready">Unapplied</button>
+          <button class="filter-tab" data-job-filter="applied">Applied</button>
+        </div>
+
+        <!-- B2B Leads List -->
         <div id="leads-list" class="leads-list">
-          <!-- Lead list generated dynamically via app.js -->
           <div class="empty-state">
             <span class="empty-icon">📭</span>
             <h3>No Prospects Found Yet</h3>
             <p>Fill out the Search Console in Step 1 to harvest high-ticket leads in any city globally for free!</p>
+          </div>
+        </div>
+
+        <!-- Gig leads list -->
+        <div id="jobs-list" class="leads-list hidden">
+          <div class="empty-state">
+            <span class="empty-icon">💼</span>
+            <h3>No Gigs Found Yet</h3>
+            <p>Turn on the Autopilot Agent or run a manual scan to harvest freelance software development leads!</p>
           </div>
         </div>
       </section>
@@ -151,7 +217,7 @@
           <span class="badge step-badge">Step 3</span>
           Gemini Outreach Studio
         </h2>
-        <p class="section-desc">Auto-generate a highly tailored sales audit and WhatsApp pitch targeting their specific reviews and bottlenecks.</p>
+        <p class="section-desc" id="studio-desc">Auto-generate a highly tailored sales audit and WhatsApp pitch targeting their specific reviews and bottlenecks.</p>
 
         <div id="pitch-container" class="pitch-container empty-pitch">
           <div class="empty-state">
