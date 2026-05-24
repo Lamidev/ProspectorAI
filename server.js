@@ -176,6 +176,7 @@ function normalizePhoneNumber(phone, location) {
 
 // 1. GET ALL LEADS
 app.get('/api/leads', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   try {
     const leads = await Lead.find().sort({ createdAt: -1 });
     res.json({ success: true, count: leads.length, data: leads });
@@ -203,6 +204,7 @@ app.post('/api/leads/search', async (req, res) => {
     const prompt = `
       Perform a live Google Search to discover 8 to 10 real, active local businesses or creators in the category "${niche}" located in "${location}" that operate on ${platform}.
       We are looking for independent local businesses (exclude national brands/franchises/jobs). 
+      CRITICAL LOCATION CONSTRAINT: Only find businesses that are actually situated in or near "${location}". Do not include businesses located in other regions, states, or cities.
       Specifically find businesses that either have no website, a broken/offline website, or rely entirely on social media/DMs for booking or selling products (e.g. using Linktree, WhatsApp links like wa.me, or having no website link at all).
       
       CRITICAL LINK & INTEGRITY CONSTRAINTS:
@@ -216,7 +218,7 @@ app.post('/api/leads/search', async (req, res) => {
       - name: The clean, professional business or creator name.
       - platform: Exactly "${platform}".
       - niche: Exactly "${niche.toLowerCase()}".
-      - location: Exactly "${location.toLowerCase()}".
+      - location: The actual city, state, or region where the business is located (e.g. "Miami, Florida" or "London, UK"). It MUST be located in or near the requested "${location.toLowerCase()}". Exclude and do not return any business located in a completely different city or state.
       - socialUrl: The actual, verified, active profile URL (e.g., https://www.instagram.com/actual_username).
       - website: The website URL listed on their profile (if any), or an empty string if none.
       - phone: A real local contact number.
@@ -460,10 +462,71 @@ app.delete('/api/leads/:id', async (req, res) => {
 
 // GET AUTOPILOT AGENT STATUS
 app.get('/api/agent/status', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   try {
     const config = await SystemConfig.findOne({ key: 'autopilot_active' });
     const isActive = config ? config.value === true : false;
     res.json({ success: true, active: isActive });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET AUTOPILOT AGENT SETTINGS AND MODE
+app.get('/api/agent/settings', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  try {
+    const activeConfig = await SystemConfig.findOne({ key: 'autopilot_active' });
+    const modeConfig = await SystemConfig.findOne({ key: 'autopilot_mode' });
+    const settingsConfig = await SystemConfig.findOne({ key: 'autopilot_b2b_settings' });
+
+    res.json({
+      success: true,
+      active: activeConfig ? activeConfig.value === true : false,
+      mode: modeConfig ? modeConfig.value : 'b2b',
+      b2bSettings: settingsConfig ? settingsConfig.value : { enabled: false, niche: '', location: '' }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// UPDATE AUTOPILOT MODE
+app.post('/api/agent/mode', async (req, res) => {
+  const { mode } = req.body;
+  if (!['b2b', 'gigs'].includes(mode)) {
+    return res.status(400).json({ success: false, message: 'Invalid autopilot mode.' });
+  }
+  try {
+    let config = await SystemConfig.findOne({ key: 'autopilot_mode' });
+    if (!config) {
+      config = new SystemConfig({ key: 'autopilot_mode', value: 'b2b' });
+    }
+    config.value = mode;
+    config.updatedAt = Date.now();
+    await config.save();
+    res.json({ success: true, mode: config.value, message: `Autopilot mode set to ${mode === 'b2b' ? 'Business Finder' : 'Developer Gig Finder'}.` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// UPDATE AUTOPILOT B2B CUSTOM SETTINGS
+app.post('/api/agent/settings', async (req, res) => {
+  const { enabled, niche, location } = req.body;
+  try {
+    let config = await SystemConfig.findOne({ key: 'autopilot_b2b_settings' });
+    if (!config) {
+      config = new SystemConfig({ key: 'autopilot_b2b_settings', value: { enabled: false, niche: '', location: '' } });
+    }
+    config.value = {
+      enabled: !!enabled,
+      niche: (niche || '').trim(),
+      location: (location || '').trim()
+    };
+    config.updatedAt = Date.now();
+    await config.save();
+    res.json({ success: true, settings: config.value, message: 'Autopilot targeting parameters saved successfully!' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -509,6 +572,7 @@ app.get('/api/agent/test-scan', async (req, res) => {
 
 // GET ALL JOB GIG LEADS
 app.get('/api/jobs', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   try {
     const jobs = await JobLead.find({ status: { $ne: 'closed' } }).sort({ createdAt: -1 });
     res.json({ success: true, count: jobs.length, data: jobs });

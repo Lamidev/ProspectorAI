@@ -9,6 +9,78 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 let activeCronTask = null;
 
+// Helper to normalize phone numbers internationally based on lead location
+function normalizePhoneNumber(phone, location) {
+  if (!phone) return '';
+  
+  // Clean all characters except digits (and + if it starts with one)
+  let cleaned = phone.trim();
+  const startsWithPlus = cleaned.startsWith('+');
+  cleaned = cleaned.replace(/[^0-9]/g, '');
+
+  if (cleaned === '') return '';
+
+  let normalized = cleaned;
+
+  const loc = (location || '').toLowerCase();
+
+  // 1. UK (London, UK, United Kingdom, Manchester, etc.)
+  if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham')) {
+    if (cleaned.startsWith('44') && cleaned.length > 10) {
+      normalized = cleaned;
+    } else {
+      if (cleaned.startsWith('0')) {
+        cleaned = cleaned.substring(1);
+      }
+      normalized = '44' + cleaned;
+    }
+  }
+  // 2. USA / Canada
+  else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas')) {
+    if (cleaned.startsWith('1') && cleaned.length === 11) {
+      normalized = cleaned;
+    } else {
+      normalized = '1' + cleaned;
+    }
+  }
+  // 3. Australia
+  else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane')) {
+    if (cleaned.startsWith('61') && cleaned.length > 9) {
+      normalized = cleaned;
+    } else {
+      if (cleaned.startsWith('0')) {
+        cleaned = cleaned.substring(1);
+      }
+      normalized = '61' + cleaned;
+    }
+  }
+  // 4. South Africa
+  else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban')) {
+    if (cleaned.startsWith('27') && cleaned.length > 9) {
+      normalized = cleaned;
+    } else {
+      if (cleaned.startsWith('0')) {
+        cleaned = cleaned.substring(1);
+      }
+      normalized = '27' + cleaned;
+    }
+  }
+  // 5. Default/Nigeria
+  else {
+    if (cleaned.startsWith('234') && cleaned.length > 10) {
+      normalized = cleaned;
+    } else {
+      if (cleaned.startsWith('0')) {
+        cleaned = cleaned.substring(1);
+      }
+      normalized = '234' + cleaned;
+    }
+  }
+
+  // Return with standard international + prefix
+  return '+' + normalized;
+}
+
 // Initialize Gemini
 let genAI = null;
 if (process.env.GEMINI_API_KEY) {
@@ -236,12 +308,35 @@ function getDynamicB2BCampaign() {
 
 // Core B2B Crawler and Qualifier Logic
 async function scanB2BLeads() {
-  const campaign = getDynamicB2BCampaign();
+  let campaign;
+  try {
+    const settingsConfig = await SystemConfig.findOne({ key: 'autopilot_b2b_settings' });
+    const settings = settingsConfig ? settingsConfig.value : null;
+
+    if (settings && settings.enabled && settings.niche && settings.location) {
+      console.log(`🔍 Autopilot B2B: Using custom targeting parameters: Niche "${settings.niche}" in "${settings.location}"`);
+      // Use custom parameters, rotate platforms randomly to get a good mix
+      const platforms = ['Google Maps', 'Yelp', 'Instagram', 'Facebook'];
+      const platform = platforms[Math.floor(Math.random() * platforms.length)];
+      campaign = {
+        niche: settings.niche,
+        location: settings.location,
+        platform: platform
+      };
+    } else {
+      campaign = getDynamicB2BCampaign();
+    }
+  } catch (err) {
+    console.error('⚠️ Autopilot B2B: Failed to read settings, falling back to rotation:', err.message);
+    campaign = getDynamicB2BCampaign();
+  }
+
   console.log(`🔍 Autopilot B2B: Scanning niche "${campaign.niche}" in "${campaign.location}" on ${campaign.platform}...`);
   
   const prompt = `
     Perform a live Google Search to discover 5 real, active local businesses or creators in the category "${campaign.niche}" located in "${campaign.location}" that operate on ${campaign.platform}.
     We are looking for independent local businesses (exclude national brands/franchises/jobs). 
+    CRITICAL LOCATION CONSTRAINT: Only find businesses that are actually situated in or near "${campaign.location}". Do not include businesses located in other regions, states, or cities.
     Specifically find businesses that either have no website, a broken/offline website, or rely entirely on social media/DMs for booking or selling products (e.g. using Linktree, WhatsApp links like wa.me, or having no website link at all).
     
     CRITICAL LINK & INTEGRITY CONSTRAINTS:
@@ -254,7 +349,7 @@ async function scanB2BLeads() {
     - name: The clean, professional business or creator name.
     - platform: Exactly "${campaign.platform}".
     - niche: Exactly "${campaign.niche.toLowerCase()}".
-    - location: Exactly "${campaign.location.toLowerCase()}".
+    - location: The actual city, state, or region where the business is located (e.g. "Miami, Florida" or "London, UK"). It MUST be located in or near the requested "${campaign.location.toLowerCase()}". Exclude and do not return any business located in a completely different city or state.
     - socialUrl: The actual, verified, active profile URL.
     - website: The website URL listed on their profile (if any), or an empty string if none.
     - phone: A real local contact number.
@@ -328,12 +423,13 @@ async function scanB2BLeads() {
       if (item.bioSnippet && item.bioSnippet.length > 20) score += 10;
       const qualityScore = Math.min(score, 100);
 
+      const normalizedPhone = normalizePhoneNumber(item.phone || '', leadLocation);
       const newLead = new Lead({
         name: item.name,
         platform: item.platform || campaign.platform || 'Google Maps',
         niche: leadNiche,
         location: leadLocation,
-        phone: item.phone || '',
+        phone: normalizedPhone,
         email: item.email || '',
         socialUrl: item.socialUrl || '',
         website: item.website || '',
@@ -661,16 +757,27 @@ async function scanRedditSubreddit(subreddit) {
 
 // Global scan executor
 async function runAllScans() {
-  // 1. Reddit subreddits
-  await scanRedditSubreddit('forhire');
-  await scanRedditSubreddit('freelance_forhire');
-  await scanRedditSubreddit('jobbit');
+  try {
+    const modeConfig = await SystemConfig.findOne({ key: 'autopilot_mode' });
+    const mode = modeConfig ? modeConfig.value : 'b2b';
 
-  // 2. Social Media Grounded Freelance Gig scans (Twitter/X & LinkedIn)
-  await scanSocialGigs();
+    console.log(`⏰ Autopilot run: Active mode is "${mode}"`);
 
-  // 3. B2B Local Business Crawler scan
-  await scanB2BLeads();
+    if (mode === 'b2b') {
+      // 1. B2B Local Business Crawler scan
+      await scanB2BLeads();
+    } else if (mode === 'gigs') {
+      // 2. Reddit subreddits
+      await scanRedditSubreddit('forhire');
+      await scanRedditSubreddit('freelance_forhire');
+      await scanRedditSubreddit('jobbit');
+
+      // 3. Social Media Grounded Freelance Gig scans (Twitter/X & LinkedIn)
+      await scanSocialGigs();
+    }
+  } catch (err) {
+    console.error('❌ Autopilot: Scan cycle failed:', err.message);
+  }
 }
 
 // Autopilot Controllers

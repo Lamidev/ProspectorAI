@@ -29,19 +29,61 @@
 
     <!-- Autopilot Control Panel -->
     <div class="autopilot-panel glass-card">
-      <div class="mode-selector">
-        <button id="mode-b2b" class="mode-tab active">🎯 B2B Business Finder</button>
-        <button id="mode-gigs" class="mode-tab">💼 Developer Gig Finder</button>
-      </div>
-      <div class="autopilot-control">
-        <div class="autopilot-info">
-          <span class="autopilot-status-dot"></span>
-          <span class="autopilot-status-text">Autopilot Agent: <strong>OFF</strong></span>
+      <div class="autopilot-main-row">
+        <div class="mode-selector">
+          <button id="mode-b2b" class="mode-tab active">🎯 B2B Business Finder</button>
+          <button id="mode-gigs" class="mode-tab">💼 Developer Gig Finder</button>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="autopilot-toggle">
-          <span class="slider round"></span>
-        </label>
+        <div class="autopilot-control">
+          <div class="autopilot-info">
+            <span class="autopilot-status-dot"></span>
+            <span class="autopilot-status-text">Autopilot Agent: <strong>OFF</strong></span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autopilot-toggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Autopilot settings for B2B -->
+      <div id="autopilot-b2b-settings" class="autopilot-settings-panel">
+        <div class="settings-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.1rem;">⚙️</span>
+            <h4 style="font-size: 0.85rem; font-weight: 850; letter-spacing: -0.01em; color: var(--text);">B2B Autopilot Targeting Parameters</h4>
+          </div>
+          <span class="badge" id="b2b-active-badge" style="font-size: 0.7rem; padding: 3px 8px;">Auto-Rotation</span>
+        </div>
+        
+        <div class="settings-row" style="margin-top: 10px;">
+          <div class="settings-toggle-group">
+            <label class="radio-option">
+              <input type="radio" name="b2b-target-mode" value="auto" checked>
+              <span class="radio-label">Auto-Rotate High-Converting Campaigns</span>
+            </label>
+            <label class="radio-option" style="margin-left: 20px;">
+              <input type="radio" name="b2b-target-mode" value="custom">
+              <span class="radio-label">Target Specific Custom Parameters</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="custom-b2b-form" class="custom-settings-form hidden" style="margin-top: 12px; border-top: 1px dashed var(--surface-border); padding-top: 12px;">
+          <div class="settings-inputs" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="settings-input-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="auto-niche-input" style="font-size: 0.72rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Target Niche / Category</label>
+              <input type="text" id="auto-niche-input" placeholder="e.g. dentist, roofing, spa" style="height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--surface-border); font-family: var(--font); font-size: 0.85rem; font-weight: 600; outline: none; background: rgba(15,23,42,0.015);">
+            </div>
+            <div class="settings-input-group" style="display: flex; flex-direction: column; gap: 6px;">
+              <label for="auto-location-input" style="font-size: 0.72rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Target Location (City, State)</label>
+              <input type="text" id="auto-location-input" placeholder="e.g. Fort Wayne, Indiana" style="height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--surface-border); font-family: var(--font); font-size: 0.85rem; font-weight: 600; outline: none; background: rgba(15,23,42,0.015);">
+            </div>
+          </div>
+          <button type="button" id="save-settings-btn" class="btn-primary settings-save-btn" style="height: 42px; margin-top: 14px; width: 100%; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(79,70,229,0.15); border-radius: 10px;">
+            💾 Save Targeting Parameters
+          </button>
+        </div>
       </div>
     </div>
 

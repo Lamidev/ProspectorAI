@@ -1170,9 +1170,10 @@ body {
 /* Autopilot Panel */
 .autopilot-panel {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 32px;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+  padding: 24px 32px;
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(79, 70, 229, 0.1);
   box-shadow: var(--shadow-sm);
@@ -1187,6 +1188,66 @@ body {
 .autopilot-panel:hover {
   border-color: rgba(79, 70, 229, 0.2);
   box-shadow: var(--shadow-md);
+}
+
+.autopilot-main-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.autopilot-settings-panel {
+  border-top: 1px dashed var(--surface-border);
+  padding-top: 16px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeIn 0.3s ease;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-toggle-group {
+  display: flex;
+  align-items: center;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.radio-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.radio-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.radio-option input[type="radio"]:checked + .radio-label {
+  color: var(--text);
+  font-weight: 750;
+}
+
+.settings-save-btn {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  font-weight: 800;
 }
 
 .mode-selector {

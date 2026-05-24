@@ -209,12 +209,35 @@ searchForm.addEventListener('submit', async (e) => {
     if (data.success) {
       statusText.textContent = 'Data crawling complete! Storing leads in MongoDB Atlas...';
       setTimeout(async () => {
+        // Reset filter tab to 'all' so new scraped results are guaranteed to display
+        currentFilter = 'all';
+        const filterTabs = document.querySelectorAll('.filter-tab');
+        filterTabs.forEach(t => {
+          if (t.getAttribute('data-filter') === 'all') {
+            t.classList.add('active');
+          } else {
+            t.classList.remove('active');
+          }
+        });
+
         await fetchLeads();
+
+        // Select the first newly scraped lead automatically to display in Studio immediately
+        if (data.data && data.data.length > 0) {
+          selectLead(data.data[0]._id);
+        }
+
         // Reset console state
         harvestStatus.classList.add('hidden');
         harvestBtn.disabled = false;
         searchForm.reset();
-        showToast(data.message, 'success');
+
+        // Show appropriate toast feedback depending on count
+        if (data.count > 0) {
+          showToast(data.message, 'success');
+        } else {
+          showToast('No new prospects found. They may already exist in your database or none matched the criteria. Try a different niche/location!', 'warning');
+        }
       }, 1000);
     } else {
       throw new Error(data.message);
@@ -235,7 +258,7 @@ searchForm.addEventListener('submit', async (e) => {
 // Fetch Leads list from Mongoose
 async function fetchLeads() {
   try {
-    const res = await fetch('/api/leads');
+    const res = await fetch('/api/leads?t=' + Date.now());
     const data = await res.json();
     if (data.success) {
       leads = data.data;
@@ -735,6 +758,20 @@ function switchMode(mode) {
   const modeGigs     = document.getElementById('mode-gigs');
   const dirDesc      = document.getElementById('directory-desc');
   const studioDesc   = document.getElementById('studio-desc');
+  const b2bSettingsPanel = document.getElementById('autopilot-b2b-settings');
+
+  // Persist mode choice to backend autopilot
+  fetch('/api/agent/mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode })
+  }).then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        appendLog(`🔄 Autopilot mode synced: ${mode === 'b2b' ? 'B2B Client search active' : 'Reddit Gig search active'}`);
+        fetchAutopilotStatus(); // Re-sync toggle messages
+      }
+    }).catch(err => console.error('Failed to sync autopilot mode:', err));
 
   if (mode === 'gigs') {
     b2bConsole.classList.add('hidden');
@@ -745,6 +782,7 @@ function switchMode(mode) {
     gigsFilters.classList.remove('hidden');
     modeB2b.classList.remove('active');
     modeGigs.classList.add('active');
+    if (b2bSettingsPanel) b2bSettingsPanel.classList.add('hidden');
     dirDesc.textContent = 'Live Reddit & social media posts actively seeking software developers right now.';
     studioDesc.textContent = 'Review the job description and send your AI-drafted proposal directly to the client.';
     fetchJobs();
@@ -757,6 +795,7 @@ function switchMode(mode) {
     b2bFilters.classList.remove('hidden');
     modeGigs.classList.remove('active');
     modeB2b.classList.add('active');
+    if (b2bSettingsPanel) b2bSettingsPanel.classList.remove('hidden');
     dirDesc.textContent = 'Real-time local leads qualified as having high ratings but poor/missing websites.';
     studioDesc.textContent = 'Auto-generate a highly tailored sales audit and WhatsApp pitch targeting their specific reviews and bottlenecks.';
     // Reset pitch studio to B2B state
@@ -771,17 +810,50 @@ function switchMode(mode) {
 
 async function fetchAutopilotStatus() {
   try {
-    const res = await fetch('/api/agent/status');
+    const res = await fetch('/api/agent/settings?t=' + Date.now());
     const data = await res.json();
     if (data.success) {
-      setToggleUI(data.active);
+      setToggleUI(data.active, data.mode);
+      
+      // Update B2B Settings UI
+      const badge = document.getElementById('b2b-active-badge');
+      const customForm = document.getElementById('custom-b2b-form');
+      const autoNicheInput = document.getElementById('auto-niche-input');
+      const autoLocationInput = document.getElementById('auto-location-input');
+      
+      if (data.b2bSettings) {
+        const { enabled, niche, location } = data.b2bSettings;
+        
+        // Select correct radio button
+        const radioMode = enabled ? 'custom' : 'auto';
+        const radio = document.querySelector(`input[name="b2b-target-mode"][value="${radioMode}"]`);
+        if (radio) radio.checked = true;
+        
+        if (enabled) {
+          if (customForm) customForm.classList.remove('hidden');
+          if (autoNicheInput) autoNicheInput.value = niche || '';
+          if (autoLocationInput) autoLocationInput.value = location || '';
+          if (badge) {
+            badge.textContent = `Targeting: ${niche} in ${location}`;
+            badge.style.background = 'rgba(79, 70, 229, 0.08)';
+            badge.style.color = 'var(--primary)';
+          }
+        } else {
+          if (customForm) customForm.classList.add('hidden');
+          if (badge) {
+            badge.textContent = 'Auto-Rotation';
+            badge.style.background = 'rgba(5, 150, 105, 0.08)';
+            badge.style.color = 'var(--success)';
+          }
+        }
+      }
     }
   } catch (err) {
-    console.error('Failed to fetch autopilot status:', err);
+    console.error('Failed to fetch autopilot status & settings:', err);
   }
 }
 
-function setToggleUI(isActive) {
+function setToggleUI(isActive, mode) {
   const toggle    = document.getElementById('autopilot-toggle');
   const dot       = document.querySelector('.autopilot-status-dot');
   const statusTxt = document.querySelector('.autopilot-status-text');
@@ -789,10 +861,17 @@ function setToggleUI(isActive) {
   if (!toggle) return;
   toggle.checked = isActive;
 
+  // Fallback to currentMode if mode is not passed
+  const activeMode = mode || currentMode;
+
   if (isActive) {
     dot.classList.add('active');
     statusTxt.innerHTML = 'Autopilot Agent: <strong style="color: #10B981;">ON</strong>';
-    appendLog('🚀 Autopilot Agent is active — scanning Reddit every 15 mins...');
+    if (activeMode === 'b2b') {
+      appendLog('🚀 Autopilot Agent is active — scanning local B2B prospects every 15 mins...');
+    } else {
+      appendLog('🚀 Autopilot Agent is active — scanning Reddit developer gig boards every 15 mins...');
+    }
   } else {
     dot.classList.remove('active');
     statusTxt.innerHTML = 'Autopilot Agent: <strong>OFF</strong>';
@@ -836,17 +915,28 @@ async function runManualScan() {
   const btn = document.getElementById('manual-scan-btn');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = '⏳ Scanning Reddit...';
+    btn.textContent = currentMode === 'b2b' ? '⏳ Scanning Businesses...' : '⏳ Scanning Reddit...';
   }
-  appendLog('⚡ Manual scan triggered — checking r/forhire, r/freelance_forhire, r/jobbit...');
+  
+  if (currentMode === 'b2b') {
+    appendLog('⚡ Manual scan triggered — searching Google for local B2B prospects...');
+  } else {
+    appendLog('⚡ Manual scan triggered — checking r/forhire, r/freelance_forhire, r/jobbit...');
+  }
 
   try {
     const res  = await fetch('/api/agent/test-scan');
     const data = await res.json();
     if (data.success) {
-      appendLog('✅ Scan complete! Check Telegram for any new HOT leads.');
-      showToast('Manual Reddit scan complete! Check your Telegram for new leads.', 'success');
-      await fetchJobs();
+      if (currentMode === 'b2b') {
+        appendLog('✅ B2B Scan complete! Check Telegram for new B2B leads.');
+        showToast('Manual B2B scan complete! Check your Telegram for new client prospects.', 'success');
+        await fetchLeads();
+      } else {
+        appendLog('✅ Scan complete! Check Telegram for any new HOT leads.');
+        showToast('Manual Reddit scan complete! Check your Telegram for new leads.', 'success');
+        await fetchJobs();
+      }
     } else {
       throw new Error(data.message);
     }
@@ -867,7 +957,7 @@ async function runManualScan() {
 
 async function fetchJobs() {
   try {
-    const res  = await fetch('/api/jobs');
+    const res  = await fetch('/api/jobs?t=' + Date.now());
     const data = await res.json();
     if (data.success) {
       jobs = data.data;
@@ -1145,7 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('autopilot-toggle');
   if (toggle) {
     toggle.addEventListener('change', handleToggle);
-    fetchAutopilotStatus(); // Sync toggle state on load
+    fetchAutopilotStatus(); // Sync toggle state and load settings on load
   }
 
   // Manual scan button
@@ -1162,4 +1252,68 @@ document.addEventListener('DOMContentLoaded', () => {
       renderJobsList();
     });
   });
+
+  // Autopilot B2B targeting settings event handling
+  const radioOptions = document.querySelectorAll('input[name="b2b-target-mode"]');
+  const customForm = document.getElementById('custom-b2b-form');
+  const saveSettingsBtn = document.getElementById('save-settings-btn');
+  const autoNicheInput = document.getElementById('auto-niche-input');
+  const autoLocationInput = document.getElementById('auto-location-input');
+
+  radioOptions.forEach(radio => {
+    radio.addEventListener('change', async (e) => {
+      const modeVal = e.target.value;
+      if (modeVal === 'auto') {
+        customForm.classList.add('hidden');
+        if (autoNicheInput) autoNicheInput.value = '';
+        if (autoLocationInput) autoLocationInput.value = '';
+        // Save auto settings to backend
+        try {
+          const res = await fetch('/api/agent/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: false, niche: '', location: '' })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('Targeting reset to Auto-Rotation Campaign preset.', 'success');
+            fetchAutopilotStatus();
+          }
+        } catch (err) {
+          console.error('Failed to reset autopilot settings:', err);
+          showToast('Failed to reset targeting settings.', 'error');
+        }
+      } else {
+        customForm.classList.remove('hidden');
+      }
+    });
+  });
+
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', async () => {
+      const niche = autoNicheInput ? autoNicheInput.value.trim() : '';
+      const location = autoLocationInput ? autoLocationInput.value.trim() : '';
+      
+      if (!niche || !location) {
+        showToast('Please enter both niche and location for custom targeting.', 'error');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/agent/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: true, niche, location })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Autopilot custom targeting settings saved!', 'success');
+          fetchAutopilotStatus();
+        }
+      } catch (err) {
+        console.error('Failed to save autopilot settings:', err);
+        showToast('Failed to save settings. Check server connection.', 'error');
+      }
+    });
+  }
 });
