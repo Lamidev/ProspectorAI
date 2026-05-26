@@ -147,21 +147,42 @@
           </div>
 
           <div class="form-group">
-            <label for="location">Target Location (City / State)</label>
+            <label for="location">Target Location(s) (Comma-separated for multi-search)</label>
             <input type="text" id="location" placeholder="e.g. Lekki, New York, London" required>
           </div>
 
           <div class="form-group">
-            <label for="platform">Lead Source Platform</label>
-            <select id="platform">
-              <option value="Instagram">Instagram Pages (Free Crawler)</option>
-              <option value="TikTok">TikTok Profiles (Free Crawler)</option>
-              <option value="Facebook">Facebook Business Pages</option>
-              <option value="Yelp">Yelp Local Listings</option>
-              <option value="LinkedIn">LinkedIn Company Pages</option>
-              <option value="TripAdvisor">TripAdvisor Listings</option>
-              <option value="Google Maps">General Google Listings</option>
-            </select>
+            <label style="margin-bottom: 2px;">Lead Source Platforms (Select Multiple)</label>
+            <div class="platform-checkbox-grid">
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="Instagram" checked>
+                <span class="checkbox-box">📸 Instagram</span>
+              </label>
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="TikTok">
+                <span class="checkbox-box">🎵 TikTok</span>
+              </label>
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="Facebook">
+                <span class="checkbox-box">👥 Facebook</span>
+              </label>
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="Yelp" checked>
+                <span class="checkbox-box">⭐ Yelp</span>
+              </label>
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="LinkedIn">
+                <span class="checkbox-box">💼 LinkedIn</span>
+              </label>
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="TripAdvisor">
+                <span class="checkbox-box">🦉 TripAdvisor</span>
+              </label>
+              <label class="platform-checkbox-item">
+                <input type="checkbox" name="platform-select" value="Google Maps" checked>
+                <span class="checkbox-box">📍 Google Maps</span>
+              </label>
+            </div>
           </div>
 
           <button type="submit" id="harvest-btn" class="btn-primary">
@@ -223,9 +244,17 @@
 
         <div class="lead-filters" id="b2b-filters">
           <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="no-website" style="color: var(--danger); font-weight: 800;">⚠️ No Website Only</button>
           <button class="filter-tab" data-filter="scraped">Scraped</button>
           <button class="filter-tab" data-filter="pitch-ready">Ready to Pitch</button>
           <button class="filter-tab" data-filter="contacted">Pitched</button>
+        </div>
+
+        <!-- B2B Bulk Actions Bar -->
+        <div id="b2b-bulk-actions" class="bulk-action-bar" style="margin-top: 12px; margin-bottom: 2px;">
+          <button type="button" id="send-all-telegram-btn" class="btn-telegram-bulk" style="width: 100%; height: 42px; border: none; border-radius: 12px; background: linear-gradient(135deg, #0088cc 0%, #006699 100%); color: white; font-family: var(--font); font-size: 0.85rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(0, 136, 204, 0.2); transition: var(--transition);">
+            📢 Send Filtered Leads to Telegram
+          </button>
         </div>
 
         <div class="lead-filters hidden" id="gigs-filters">

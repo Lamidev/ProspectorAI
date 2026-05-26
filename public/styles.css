@@ -1454,3 +1454,54 @@ input:checked + .slider:before {
   border-left: 4px solid #0A66C2;
 }
 
+/* Custom Platform Checkboxes Grid */
+.platform-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.platform-checkbox-item {
+  position: relative;
+  cursor: pointer;
+  display: block;
+}
+
+.platform-checkbox-item input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkbox-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  background: rgba(15, 23, 42, 0.02);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  transition: var(--transition);
+  user-select: none;
+  text-align: center;
+}
+
+.platform-checkbox-item:hover .checkbox-box {
+  background: rgba(79, 70, 229, 0.04);
+  border-color: rgba(79, 70, 229, 0.2);
+}
+
+.platform-checkbox-item input:checked ~ .checkbox-box {
+  background: var(--primary-glow);
+  color: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px -2px rgba(79, 70, 229, 0.15);
+}
+

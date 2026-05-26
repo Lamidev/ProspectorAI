@@ -145,7 +145,6 @@ function formatExternalUrl(url) {
 const searchForm = document.getElementById('search-form');
 const nicheInput = document.getElementById('niche');
 const locationInput = document.getElementById('location');
-const platformSelect = document.getElementById('platform');
 const harvestBtn = document.getElementById('harvest-btn');
 const harvestStatus = document.getElementById('harvest-status');
 const statusText = document.getElementById('status-text');
@@ -182,70 +181,104 @@ filterTabs.forEach(tab => {
   });
 });
 
-// Submit Google Search Harvest Request
+// Submit Google Search Harvest Request (Sequential Multi-Location & Multi-Platform)
 searchForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   
   const niche = nicheInput.value.trim();
-  const location = locationInput.value.trim();
-  const platform = platformSelect.value;
+  const rawLocation = locationInput.value.trim();
+  
+  // Split comma-separated locations and clean them
+  const locations = rawLocation.split(',').map(l => l.trim()).filter(l => l !== '');
+  
+  // Extract all checked platforms
+  const selectedPlatforms = Array.from(document.querySelectorAll('input[name="platform-select"]:checked')).map(cb => cb.value);
 
-  if (!niche || !location) return;
+  if (!niche || locations.length === 0) return;
+  
+  if (selectedPlatforms.length === 0) {
+    showToast('Please select at least one lead source platform.', 'error');
+    return;
+  }
 
   // Show Loading Status Overlay
   harvestStatus.classList.remove('hidden');
   harvestBtn.disabled = true;
-  statusText.textContent = `Crawling Google's index for ${niche}s in ${location}...`;
+
+  let totalNewLeadsCount = 0;
+  let firstNewLeadId = null;
 
   try {
-    const res = await fetch('/api/leads/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ niche, location, platform })
-    });
+    // Run the multi-search sequentially in the background
+    for (const loc of locations) {
+      for (const plat of selectedPlatforms) {
+        statusText.textContent = `Crawling ${plat} for "${niche}" in "${loc}"...`;
+        
+        try {
+          const res = await fetch('/api/leads/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ niche, location: loc, platform: plat })
+          });
 
-    const data = await res.json();
-    
-    if (data.success) {
-      statusText.textContent = 'Data crawling complete! Storing leads in MongoDB Atlas...';
-      setTimeout(async () => {
-        // Reset filter tab to 'all' so new scraped results are guaranteed to display
-        currentFilter = 'all';
-        const filterTabs = document.querySelectorAll('.filter-tab');
-        filterTabs.forEach(t => {
-          if (t.getAttribute('data-filter') === 'all') {
-            t.classList.add('active');
+          const data = await res.json();
+          
+          if (data.success) {
+            totalNewLeadsCount += data.count;
+            if (data.data && data.data.length > 0 && !firstNewLeadId) {
+              firstNewLeadId = data.data[0]._id;
+            }
           } else {
-            t.classList.remove('active');
+            console.warn(`Search failed for "${niche}" in "${loc}" on ${plat}:`, data.message);
           }
-        });
-
-        await fetchLeads();
-
-        // Select the first newly scraped lead automatically to display in Studio immediately
-        if (data.data && data.data.length > 0) {
-          selectLead(data.data[0]._id);
+        } catch (itemErr) {
+          console.error(`Request failed for "${niche}" in "${loc}" on ${plat}:`, itemErr.message);
         }
-
-        // Reset console state
-        harvestStatus.classList.add('hidden');
-        harvestBtn.disabled = false;
-        searchForm.reset();
-
-        // Show appropriate toast feedback depending on count
-        if (data.count > 0) {
-          showToast(data.message, 'success');
-        } else {
-          showToast('No new prospects found. They may already exist in your database or none matched the criteria. Try a different niche/location!', 'warning');
-        }
-      }, 1000);
-    } else {
-      throw new Error(data.message);
+      }
     }
+
+    statusText.textContent = 'Data crawling complete! Storing leads in MongoDB Atlas...';
+    
+    setTimeout(async () => {
+      // Reset filter tab to 'all' so new scraped results are guaranteed to display
+      currentFilter = 'all';
+      const filterTabs = document.querySelectorAll('.filter-tab');
+      filterTabs.forEach(t => {
+        if (t.getAttribute('data-filter') === 'all') {
+          t.classList.add('active');
+        } else {
+          t.classList.remove('active');
+        }
+      });
+
+      await fetchLeads();
+
+      // Select the first newly scraped lead automatically to display in Studio immediately
+      if (firstNewLeadId) {
+        selectLead(firstNewLeadId);
+      }
+
+      // Reset console state
+      harvestStatus.classList.add('hidden');
+      harvestBtn.disabled = false;
+      searchForm.reset();
+
+      // Restore defaults for platform checkboxes
+      document.querySelectorAll('input[name="platform-select"]').forEach(cb => {
+        cb.checked = ['Instagram', 'Yelp', 'Google Maps'].includes(cb.value);
+      });
+
+      // Show appropriate toast feedback depending on count
+      if (totalNewLeadsCount > 0) {
+        showToast(`Harvest completed! Successfully found and saved ${totalNewLeadsCount} new high-quality prospects.`, 'success');
+      } else {
+        showToast('No new prospects found. They may already exist in your database or none matched the criteria. Try a different niche/location!', 'warning');
+      }
+    }, 1000);
 
   } catch (err) {
     console.error(err);
-    showToast(err.message || 'Scraping request failed. Verify your Google Custom Search API key or daily free limit.', 'error');
+    showToast(err.message || 'Scraping request failed. Check server logs.', 'error');
     harvestStatus.classList.add('hidden');
     harvestBtn.disabled = false;
   }
@@ -273,7 +306,13 @@ async function fetchLeads() {
 function renderLeadsList() {
   let filteredLeads = leads;
 
-  if (currentFilter !== 'all') {
+  if (currentFilter === 'no-website') {
+    filteredLeads = leads.filter(lead => 
+      lead.websiteStatus === 'Missing Website' || 
+      lead.websiteStatus === 'Broken/Offline Website' || 
+      lead.websiteStatus === 'Social-Only Catalog'
+    );
+  } else if (currentFilter !== 'all') {
     filteredLeads = leads.filter(lead => lead.status === currentFilter);
   }
 
@@ -317,6 +356,15 @@ function renderLeadsList() {
       ? 'score-high' 
       : (lead.qualityScore >= 45 ? 'score-med' : 'score-low');
 
+    // Parse and format scrape date
+    const scrapeDate = lead.createdAt ? new Date(lead.createdAt) : new Date();
+    const dateStr = scrapeDate.toLocaleDateString(undefined, { 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
     return `
       <div class="lead-item ${isActive}" onclick="selectLead('${lead._id}')">
         <div class="lead-info">
@@ -328,12 +376,14 @@ function renderLeadsList() {
           <div class="lead-meta" style="margin-top: 4px;">
             <span>${statsLabel}</span>
             <span>${hasContact}</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;" title="Scrape Date">📅 ${dateStr}</span>
           </div>
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
           <button class="list-delete-btn" onclick="event.stopPropagation(); deleteProspect('${lead._id}')" title="Delete Prospect">🗑️</button>
           <span class="status-pill status-${lead.status}">${lead.status.replace('-', ' ')}</span>
           <span class="score-badge ${scoreClass}">${lead.qualityScore || 0}% Score</span>
+          ${lead.telegramSent ? '<span class="status-pill" style="background: rgba(0, 136, 204, 0.08); color: #0088cc; font-size: 0.62rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.02em; border: 1px solid rgba(0, 136, 204, 0.15);">✈️ Push Sent</span>' : ''}
         </div>
       </div>
     `;
@@ -576,19 +626,24 @@ function normalizePhoneForWhatsApp(phone, location) {
   } else {
     const loc = (location || '').toLowerCase();
 
-    // 1. UK (London, UK, United Kingdom, Manchester, etc.)
-    if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham')) {
-      if (cleaned.startsWith('44') && cleaned.length > 10) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '44' + cleaned;
+    // Helper to format with specific country code
+    const applyCountryCode = (code) => {
+      if (cleaned.startsWith(code) && cleaned.length > code.length + 6) {
+        return cleaned;
       }
+      let localNum = cleaned;
+      if (localNum.startsWith('0')) {
+        localNum = localNum.substring(1);
+      }
+      return code + localNum;
+    };
+
+    // 1. UK (London, UK, United Kingdom, etc.)
+    if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham') || loc.includes('leeds') || loc.includes('glasgow') || loc.includes('liverpool') || loc.includes('edinburgh')) {
+      normalized = applyCountryCode('44');
     }
     // 2. USA / Canada
-    else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas')) {
+    else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas') || loc.includes('florida')) {
       if (cleaned.startsWith('1') && cleaned.length === 11) {
         normalized = cleaned;
       } else {
@@ -596,37 +651,48 @@ function normalizePhoneForWhatsApp(phone, location) {
       }
     }
     // 3. Australia
-    else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane')) {
-      if (cleaned.startsWith('61') && cleaned.length > 9) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '61' + cleaned;
-      }
+    else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane') || loc.includes('perth') || loc.includes('adelaide')) {
+      normalized = applyCountryCode('61');
     }
     // 4. South Africa
-    else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban')) {
-      if (cleaned.startsWith('27') && cleaned.length > 9) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '27' + cleaned;
-      }
+    else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban') || loc.includes('pretoria')) {
+      normalized = applyCountryCode('27');
     }
-    // 5. Default/Nigeria
+    // 5. Germany
+    else if (loc.includes('germany') || loc.includes('berlin') || loc.includes('munich') || loc.includes('hamburg') || loc.includes('frankfurt') || loc.includes('deutschland')) {
+      normalized = applyCountryCode('49');
+    }
+    // 6. France
+    else if (loc.includes('france') || loc.includes('paris') || loc.includes('lyon') || loc.includes('marseille')) {
+      normalized = applyCountryCode('33');
+    }
+    // 7. Netherlands
+    else if (loc.includes('netherlands') || loc.includes('amsterdam') || loc.includes('rotterdam') || loc.includes('utrecht') || loc.includes('hague') || loc.includes('holland')) {
+      normalized = applyCountryCode('31');
+    }
+    // 8. Ireland
+    else if (loc.includes('ireland') || loc.includes('dublin') || loc.includes('cork') || loc.includes('galway')) {
+      normalized = applyCountryCode('353');
+    }
+    // 9. Sweden
+    else if (loc.includes('sweden') || loc.includes('stockholm') || loc.includes('gothenburg') || loc.includes('sverige')) {
+      normalized = applyCountryCode('46');
+    }
+    // 10. Switzerland
+    else if (loc.includes('switzerland') || loc.includes('zurich') || loc.includes('geneva') || loc.includes('schweiz')) {
+      normalized = applyCountryCode('41');
+    }
+    // 11. Spain
+    else if (loc.includes('spain') || loc.includes('madrid') || loc.includes('barcelona')) {
+      normalized = applyCountryCode('34');
+    }
+    // 12. Italy
+    else if (loc.includes('italy') || loc.includes('rome') || loc.includes('milan')) {
+      normalized = applyCountryCode('39');
+    }
+    // 13. Default/Nigeria
     else {
-      if (cleaned.startsWith('234') && cleaned.length > 10) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '234' + cleaned;
-      }
+      normalized = applyCountryCode('234');
     }
   }
 
@@ -754,6 +820,7 @@ function switchMode(mode) {
   const jobsList     = document.getElementById('jobs-list');
   const b2bFilters   = document.getElementById('b2b-filters');
   const gigsFilters  = document.getElementById('gigs-filters');
+  const b2bBulkActions = document.getElementById('b2b-bulk-actions');
   const modeB2b      = document.getElementById('mode-b2b');
   const modeGigs     = document.getElementById('mode-gigs');
   const dirDesc      = document.getElementById('directory-desc');
@@ -780,6 +847,7 @@ function switchMode(mode) {
     jobsList.classList.remove('hidden');
     b2bFilters.classList.add('hidden');
     gigsFilters.classList.remove('hidden');
+    if (b2bBulkActions) b2bBulkActions.classList.add('hidden');
     modeB2b.classList.remove('active');
     modeGigs.classList.add('active');
     if (b2bSettingsPanel) b2bSettingsPanel.classList.add('hidden');
@@ -793,6 +861,7 @@ function switchMode(mode) {
     leadsList.classList.remove('hidden');
     gigsFilters.classList.add('hidden');
     b2bFilters.classList.remove('hidden');
+    if (b2bBulkActions) b2bBulkActions.classList.remove('hidden');
     modeGigs.classList.remove('active');
     modeB2b.classList.add('active');
     if (b2bSettingsPanel) b2bSettingsPanel.classList.remove('hidden');
@@ -831,8 +900,7 @@ async function fetchAutopilotStatus() {
         
         if (enabled) {
           if (customForm) customForm.classList.remove('hidden');
-          if (autoNicheInput) autoNicheInput.value = niche || '';
-          if (autoLocationInput) autoLocationInput.value = location || '';
+          // Do not overwrite autoNicheInput.value/autoLocationInput.value here so inputs act as a clean, cleared entry form on saves!
           if (badge) {
             badge.textContent = `Targeting: ${niche} in ${location}`;
             badge.style.background = 'rgba(79, 70, 229, 0.08)';
@@ -1308,11 +1376,74 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (data.success) {
           showToast('Autopilot custom targeting settings saved!', 'success');
+          // Clear inputs immediately as requested
+          if (autoNicheInput) autoNicheInput.value = '';
+          if (autoLocationInput) autoLocationInput.value = '';
           fetchAutopilotStatus();
         }
       } catch (err) {
         console.error('Failed to save autopilot settings:', err);
         showToast('Failed to save settings. Check server connection.', 'error');
+      }
+    });
+  }
+
+  // Bulk push leads to Telegram
+  const sendAllTelegramBtn = document.getElementById('send-all-telegram-btn');
+  if (sendAllTelegramBtn) {
+    sendAllTelegramBtn.addEventListener('click', async () => {
+      // Filter out already sent leads to prevent duplicates
+      let leadsToPush = leads.filter(lead => !lead.telegramSent);
+      
+      if (currentFilter === 'no-website') {
+        leadsToPush = leadsToPush.filter(lead => 
+          lead.websiteStatus === 'Missing Website' || 
+          lead.websiteStatus === 'Broken/Offline Website' || 
+          lead.websiteStatus === 'Social-Only Catalog'
+        );
+      } else if (currentFilter !== 'all') {
+        leadsToPush = leadsToPush.filter(lead => lead.status === currentFilter);
+      }
+
+      const count = leadsToPush.length;
+      if (count === 0) {
+        showToast('No new, unsent prospects currently match this filter tab.', 'warning');
+        return;
+      }
+
+      const confirmPush = await showConfirm(
+        'Push Leads to Telegram',
+        `Are you sure you want to push all ${count} unsent prospects to your Telegram chat? (Leads already sent will be skipped automatically)`,
+        {
+          confirmText: 'Send to Telegram',
+          cancelText: 'Cancel',
+          icon: '📢'
+        }
+      );
+      if (!confirmPush) return;
+
+      sendAllTelegramBtn.disabled = true;
+      sendAllTelegramBtn.textContent = `⏳ Sending ${count} Leads...`;
+
+      try {
+        const res = await fetch('/api/leads/telegram-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: leadsToPush.map(l => l._id) })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          await fetchLeads(); // Refresh data
+        } else {
+          throw new Error(data.message);
+        }
+      } catch (err) {
+        console.error('Failed to push leads to Telegram:', err);
+        showToast(err.message || 'Failed to push leads to Telegram.', 'error');
+      } finally {
+        sendAllTelegramBtn.disabled = false;
+        sendAllTelegramBtn.textContent = '📢 Send Filtered Leads to Telegram';
       }
     });
   }

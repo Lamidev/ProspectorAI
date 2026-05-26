@@ -112,19 +112,24 @@ function normalizePhoneNumber(phone, location) {
   } else {
     const loc = (location || '').toLowerCase();
 
-    // 1. UK (London, UK, United Kingdom, Manchester, etc.)
-    if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham')) {
-      if (cleaned.startsWith('44') && cleaned.length > 10) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '44' + cleaned;
+    // Helper to format with specific country code
+    const applyCountryCode = (code) => {
+      if (cleaned.startsWith(code) && cleaned.length > code.length + 6) {
+        return cleaned;
       }
+      let localNum = cleaned;
+      if (localNum.startsWith('0')) {
+        localNum = localNum.substring(1);
+      }
+      return code + localNum;
+    };
+
+    // 1. UK (London, UK, United Kingdom, etc.)
+    if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham') || loc.includes('leeds') || loc.includes('glasgow') || loc.includes('liverpool') || loc.includes('edinburgh')) {
+      normalized = applyCountryCode('44');
     }
     // 2. USA / Canada
-    else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas')) {
+    else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas') || loc.includes('florida')) {
       if (cleaned.startsWith('1') && cleaned.length === 11) {
         normalized = cleaned;
       } else {
@@ -132,37 +137,48 @@ function normalizePhoneNumber(phone, location) {
       }
     }
     // 3. Australia
-    else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane')) {
-      if (cleaned.startsWith('61') && cleaned.length > 9) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '61' + cleaned;
-      }
+    else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane') || loc.includes('perth') || loc.includes('adelaide')) {
+      normalized = applyCountryCode('61');
     }
     // 4. South Africa
-    else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban')) {
-      if (cleaned.startsWith('27') && cleaned.length > 9) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '27' + cleaned;
-      }
+    else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban') || loc.includes('pretoria')) {
+      normalized = applyCountryCode('27');
     }
-    // 5. Default/Nigeria
+    // 5. Germany
+    else if (loc.includes('germany') || loc.includes('berlin') || loc.includes('munich') || loc.includes('hamburg') || loc.includes('frankfurt') || loc.includes('deutschland')) {
+      normalized = applyCountryCode('49');
+    }
+    // 6. France
+    else if (loc.includes('france') || loc.includes('paris') || loc.includes('lyon') || loc.includes('marseille')) {
+      normalized = applyCountryCode('33');
+    }
+    // 7. Netherlands
+    else if (loc.includes('netherlands') || loc.includes('amsterdam') || loc.includes('rotterdam') || loc.includes('utrecht') || loc.includes('hague') || loc.includes('holland')) {
+      normalized = applyCountryCode('31');
+    }
+    // 8. Ireland
+    else if (loc.includes('ireland') || loc.includes('dublin') || loc.includes('cork') || loc.includes('galway')) {
+      normalized = applyCountryCode('353');
+    }
+    // 9. Sweden
+    else if (loc.includes('sweden') || loc.includes('stockholm') || loc.includes('gothenburg') || loc.includes('sverige')) {
+      normalized = applyCountryCode('46');
+    }
+    // 10. Switzerland
+    else if (loc.includes('switzerland') || loc.includes('zurich') || loc.includes('geneva') || loc.includes('schweiz')) {
+      normalized = applyCountryCode('41');
+    }
+    // 11. Spain
+    else if (loc.includes('spain') || loc.includes('madrid') || loc.includes('barcelona')) {
+      normalized = applyCountryCode('34');
+    }
+    // 12. Italy
+    else if (loc.includes('italy') || loc.includes('rome') || loc.includes('milan')) {
+      normalized = applyCountryCode('39');
+    }
+    // 13. Default/Nigeria
     else {
-      if (cleaned.startsWith('234') && cleaned.length > 10) {
-        normalized = cleaned;
-      } else {
-        if (cleaned.startsWith('0')) {
-          cleaned = cleaned.substring(1);
-        }
-        normalized = '234' + cleaned;
-      }
+      normalized = applyCountryCode('234');
     }
   }
 
@@ -205,7 +221,14 @@ app.post('/api/leads/search', async (req, res) => {
       Perform a live Google Search to discover 8 to 10 real, active local businesses or creators in the category "${niche}" located in "${location}" that operate on ${platform}.
       We are looking for independent local businesses (exclude national brands/franchises/jobs). 
       CRITICAL LOCATION CONSTRAINT: Only find businesses that are actually situated in or near "${location}". Do not include businesses located in other regions, states, or cities.
-      Specifically find businesses that either have no website, a broken/offline website, or rely entirely on social media/DMs for booking or selling products (e.g. using Linktree, WhatsApp links like wa.me, or having no website link at all).
+      
+      WEBSITE AUDIT PRIORITIZATION CONSTRAINT:
+      Your primary goal is to find businesses that DO NOT have a website, have a broken/dead website link, or rely completely on social media catalogs or DMs for customer bookings (e.g., using Linktree, WhatsApp links like wa.me, or having no website listed at all). 
+      If you can only find businesses that already have websites, you MAY return them, but prioritize those with basic or poorly optimized websites, and list their specific digital bottlenecks (e.g. "No online booking," "Poor mobile catalog," "Manual DM booking," "Zero local search optimization").
+      
+      STRICT JSON FORMATTING & REFUSAL CONSTRAINT:
+      You MUST ALWAYS return your response as a valid JSON array of objects matching the schema below. 
+      Under no circumstances should you return conversational text, apologies, explanations of search difficulties, warnings, or refutations. Even if no perfect matches are found, return a valid JSON array (or an empty array \`[]\` if absolutely nothing is found). Never start your response with "I am unable", "I cannot", or any conversational disclaimer.
       
       CRITICAL LINK & INTEGRITY CONSTRAINTS:
       1. Every single business you return MUST have a real, verified, active profile URL on ${platform}.
@@ -358,16 +381,62 @@ app.post('/api/leads/search', async (req, res) => {
   }
 });
 
-// 3. GENERATE GEMINI PITCH FOR A LEAD
+// Helper to generate a premium, high-converting B2B outreach pitch locally for free!
+function generateLocalPitch(lead) {
+  const platformName = lead.platform || 'Google Maps';
+  const reviewsCount = lead.reviewsCount || 0;
+  const niche = lead.niche || 'business';
+  const name = lead.name || 'Business Owner';
+  const location = lead.location || 'your area';
+  
+  let attentionGrabber = `We saw your outstanding ${niche} presence in ${location}`;
+  if (reviewsCount > 5) {
+    if (platformName === 'Instagram' || platformName === 'TikTok') {
+      attentionGrabber = `We came across your highly active ${niche} profile in ${location} with ${reviewsCount} followers`;
+    } else {
+      attentionGrabber = `We saw your highly rated ${niche} listing in ${location} with ${reviewsCount} reviews`;
+    }
+  }
+
+  let bottleneckText = '';
+  const websiteStatus = lead.websiteStatus || 'Missing Website';
+  const bottlenecks = lead.bottlenecks || [];
+  
+  if (websiteStatus === 'Missing Website') {
+    bottleneckText = `We noticed you don't have a custom website listed on your page. Right now, you are relying completely on manual coordination (like phone calls or social DMs) for bookings and inquiries.`;
+  } else if (websiteStatus === 'Broken/Offline Website') {
+    bottleneckText = `We noticed that the website link listed on your profile is currently offline or broken. This is causing high-intent local clients who click to drop off immediately.`;
+  } else if (websiteStatus === 'Social-Only Catalog') {
+    bottleneckText = `We noticed you are using a basic link-in-bio or social catalog. This makes it difficult for local search engines to find you and forces customers to do manual work to book your services.`;
+  } else {
+    bottleneckText = `We noticed some digital bottlenecks in your online presentation, specifically around local search visibility and ease of customer checkout.`;
+  }
+
+  if (bottlenecks.length > 0) {
+    bottleneckText += ` This leads to ${bottlenecks.join(', ')} which costs you high-value bookings daily.`;
+  }
+
+  return `Hi ${name},
+
+${attentionGrabber}. You are doing an impressive job, but we noticed a major digital bottleneck that is costing you business:
+
+${bottleneckText}
+
+When local customers search for a ${niche} in ${location}, they expect a premium, mobile-optimized booking site where they can view your services and book instantly in 2 clicks. Without this, you are losing high-value clients directly to competitors who do have custom websites.
+
+We build premium, custom, mobile-optimized websites and automated booking catalogs tailored specifically for brands like ${name} to automate your client acquisition.
+
+Are you open to a brief 2-minute chat this week to see how we can build this for you and recover lost revenue?
+
+Sincerely,
+AkinByte Technologies Limited
+Email: Akinyemioluwaseunjunior@gmail.com
+Phone: +234 7071238658`;
+}
+
+// 3. GENERATE CUSTOM PITCH FOR A LEAD (LOCAL ENGINE - $0 COST)
 app.post('/api/leads/:id/pitch', async (req, res) => {
   const { id } = req.params;
-
-  if (!genAI) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Gemini AI is not configured. Add GEMINI_API_KEY to your .env file.' 
-    });
-  }
 
   try {
     const lead = await Lead.findById(id);
@@ -375,53 +444,18 @@ app.post('/api/leads/:id/pitch', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Lead not found.' });
     }
 
-    // Build highly professional proposal prompt (Corporate Lead Auditing)
-    let prompt = `
-      You are an expert business growth consultant and professional sales copywriter.
-      Write an extremely direct, conversational, and highly persuasive business outreach message addressed to "${lead.name}".
-      The goal of this message is to capture their attention instantly. Keep the message short, punchy, and under 150 to 200 words. Avoid long essays, formal business reports, or dry documents.
-      
-      Here is the diagnostic audit data of the prospect:
-      Name: ${lead.name}
-      Platform: ${lead.platform}
-      Category/Niche: ${lead.niche}
-      Location: ${lead.location}
-      Contact: ${lead.phone ? `Phone: ${lead.phone}` : ''} ${lead.email ? `Email: ${lead.email}` : ''}
-      Social Link: ${lead.socialUrl}
-      Website Status: ${lead.websiteStatus || 'Missing Website'}
-      Identified Bottlenecks: ${(lead.bottlenecks || []).join(', ') || 'No custom website, manual booking/sales'}
-      Reviews/Followers: ${lead.reviewsCount || 0}
-      
-      OUTREACH STRUCTURE:
-      1. COMPLIMENT & ATTENTION GRABBER: Start by complimenting their impressive presence or customer feedback (e.g. "We saw your highly rated ${lead.niche} profile in ${lead.location} with ${lead.reviewsCount} reviews...").
-      2. THE PROBLEM & LOSS: Directly but politely highlight their core digital operational bottleneck (e.g. a missing website link, an offline/dead URL, or relying entirely on DMs/phone calls). Clearly articulate what they are losing because of this (e.g. losing potential customers who drop off when they can't book instantly, hours wasted on manual chat coordination, and losing local search traffic to competitors).
-      3. THE SOLUTION & CALL TO ACTION: Propose building a premium, custom mobile-optimized website and booking catalog designed specifically for their brand to automate client acquisition and recovery. Ask if they are open to a brief 2-minute chat this week to discuss how we can implement this.
-      
-      STRICT CONTROLS:
-      - Keep it short, conversational, and direct. NO long blocks of formal proposal text.
-      - Do NOT use any emojis, smileys, or icons.
-      - Do NOT claim, suggest, or imply that we have already built a mockup, website, preview, or catalog for them. Do NOT ask them to review a "preview link" or "mockup link". Focus purely on offering to design and build a custom website solution for their brand to solve their digital bottleneck.
-      - Do not include brackets, placeholders, or template tags (like [Name], [Your Name], [Contact Info]) in the final proposal text.
-      - Sign off formally as:
-        Sincerely,
-        AkinByte Technologies Limited
-        Email: Akinyemioluwaseunjunior@gmail.com
-        Phone: +234 7071238658
-    `;
+    console.log(`🤖 Local Pitch Engine: Instantly generating pitch for: ${lead.name}`);
 
-    console.log(`🤖 Generating Gemini Proposal for: ${lead.name}`);
-
-    const pitchText = await generateGeminiContent(prompt);
-
-    lead.customPitch = pitchText;
+    // Generate local high-converting pitch instantly for $0
+    lead.customPitch = generateLocalPitch(lead);
     lead.status = 'pitch-ready';
     await lead.save();
 
     res.json({ success: true, data: lead });
 
   } catch (err) {
-    console.error('Gemini Generation Error:', err);
-    res.status(500).json({ success: false, message: 'Failed to generate custom proposal via Gemini.' });
+    console.error('Local Pitch Engine Error:', err);
+    res.status(500).json({ success: false, message: 'Failed to generate custom proposal locally.' });
   }
 });
 
@@ -503,6 +537,7 @@ app.post('/api/agent/mode', async (req, res) => {
       config = new SystemConfig({ key: 'autopilot_mode', value: 'b2b' });
     }
     config.value = mode;
+    config.markModified('value');
     config.updatedAt = Date.now();
     await config.save();
     res.json({ success: true, mode: config.value, message: `Autopilot mode set to ${mode === 'b2b' ? 'Business Finder' : 'Developer Gig Finder'}.` });
@@ -524,6 +559,7 @@ app.post('/api/agent/settings', async (req, res) => {
       niche: (niche || '').trim(),
       location: (location || '').trim()
     };
+    config.markModified('value');
     config.updatedAt = Date.now();
     await config.save();
     res.json({ success: true, settings: config.value, message: 'Autopilot targeting parameters saved successfully!' });
@@ -543,6 +579,7 @@ app.post('/api/agent/toggle', async (req, res) => {
 
     // Toggle value
     config.value = !config.value;
+    config.markModified('value');
     config.updatedAt = Date.now();
     await config.save();
 
@@ -607,6 +644,38 @@ app.delete('/api/jobs/:id', async (req, res) => {
     res.json({ success: true, message: 'Job lead deleted successfully.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// BULK PUSH B2B LEADS TO TELEGRAM
+app.post('/api/leads/telegram-push', async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'Please provide an array of lead IDs.' });
+  }
+
+  const { sendTelegramB2BAlert } = require('./services/autopilot');
+
+  try {
+    let sentCount = 0;
+    for (const id of ids) {
+      const lead = await Lead.findById(id);
+      if (lead && !lead.telegramSent) {
+        // If the lead doesn't have a pitch yet, generate one locally on-the-fly before sending!
+        if (!lead.customPitch || lead.customPitch.trim() === '') {
+          console.log(`🤖 Bulk Telegram: Instantly generating local pitch for: ${lead.name}`);
+          lead.customPitch = generateLocalPitch(lead);
+          lead.status = 'pitch-ready';
+          await lead.save();
+        }
+        await sendTelegramB2BAlert(lead);
+        sentCount++;
+      }
+    }
+    res.json({ success: true, message: `Successfully pushed ${sentCount} leads directly to your Telegram chat!` });
+  } catch (err) {
+    console.error('❌ Bulk Telegram push failed:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to push leads to Telegram.' });
   }
 });
 

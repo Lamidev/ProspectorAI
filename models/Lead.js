@@ -76,6 +76,10 @@ const LeadSchema = new mongoose.Schema({
     enum: ['scraped', 'pitch-ready', 'contacted', 'interested', 'closed', 'rejected'],
     default: 'scraped'
   },
+  telegramSent: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now

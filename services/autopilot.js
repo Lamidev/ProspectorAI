@@ -22,58 +22,78 @@ function normalizePhoneNumber(phone, location) {
 
   let normalized = cleaned;
 
-  const loc = (location || '').toLowerCase();
+  if (startsWithPlus) {
+    normalized = cleaned;
+  } else {
+    const loc = (location || '').toLowerCase();
 
-  // 1. UK (London, UK, United Kingdom, Manchester, etc.)
-  if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham')) {
-    if (cleaned.startsWith('44') && cleaned.length > 10) {
-      normalized = cleaned;
-    } else {
-      if (cleaned.startsWith('0')) {
-        cleaned = cleaned.substring(1);
+    // Helper to format with specific country code
+    const applyCountryCode = (code) => {
+      if (cleaned.startsWith(code) && cleaned.length > code.length + 6) {
+        return cleaned;
       }
-      normalized = '44' + cleaned;
-    }
-  }
-  // 2. USA / Canada
-  else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas')) {
-    if (cleaned.startsWith('1') && cleaned.length === 11) {
-      normalized = cleaned;
-    } else {
-      normalized = '1' + cleaned;
-    }
-  }
-  // 3. Australia
-  else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane')) {
-    if (cleaned.startsWith('61') && cleaned.length > 9) {
-      normalized = cleaned;
-    } else {
-      if (cleaned.startsWith('0')) {
-        cleaned = cleaned.substring(1);
+      let localNum = cleaned;
+      if (localNum.startsWith('0')) {
+        localNum = localNum.substring(1);
       }
-      normalized = '61' + cleaned;
+      return code + localNum;
+    };
+
+    // 1. UK (London, UK, United Kingdom, etc.)
+    if (loc.includes('uk') || loc.includes('united kingdom') || loc.includes('london') || loc.includes('manchester') || loc.includes('birmingham') || loc.includes('leeds') || loc.includes('glasgow') || loc.includes('liverpool') || loc.includes('edinburgh')) {
+      normalized = applyCountryCode('44');
     }
-  }
-  // 4. South Africa
-  else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban')) {
-    if (cleaned.startsWith('27') && cleaned.length > 9) {
-      normalized = cleaned;
-    } else {
-      if (cleaned.startsWith('0')) {
-        cleaned = cleaned.substring(1);
+    // 2. USA / Canada
+    else if (loc.includes('usa') || loc.includes('united states') || loc.includes('america') || loc.includes('canada') || loc.includes('toronto') || loc.includes('vancouver') || loc.includes('new york') || loc.includes('california') || loc.includes('texas') || loc.includes('florida')) {
+      if (cleaned.startsWith('1') && cleaned.length === 11) {
+        normalized = cleaned;
+      } else {
+        normalized = '1' + cleaned;
       }
-      normalized = '27' + cleaned;
     }
-  }
-  // 5. Default/Nigeria
-  else {
-    if (cleaned.startsWith('234') && cleaned.length > 10) {
-      normalized = cleaned;
-    } else {
-      if (cleaned.startsWith('0')) {
-        cleaned = cleaned.substring(1);
-      }
-      normalized = '234' + cleaned;
+    // 3. Australia
+    else if (loc.includes('australia') || loc.includes('sydney') || loc.includes('melbourne') || loc.includes('brisbane') || loc.includes('perth') || loc.includes('adelaide')) {
+      normalized = applyCountryCode('61');
+    }
+    // 4. South Africa
+    else if (loc.includes('south africa') || loc.includes('johannesburg') || loc.includes('cape town') || loc.includes('durban') || loc.includes('pretoria')) {
+      normalized = applyCountryCode('27');
+    }
+    // 5. Germany
+    else if (loc.includes('germany') || loc.includes('berlin') || loc.includes('munich') || loc.includes('hamburg') || loc.includes('frankfurt') || loc.includes('deutschland')) {
+      normalized = applyCountryCode('49');
+    }
+    // 6. France
+    else if (loc.includes('france') || loc.includes('paris') || loc.includes('lyon') || loc.includes('marseille')) {
+      normalized = applyCountryCode('33');
+    }
+    // 7. Netherlands
+    else if (loc.includes('netherlands') || loc.includes('amsterdam') || loc.includes('rotterdam') || loc.includes('utrecht') || loc.includes('hague') || loc.includes('holland')) {
+      normalized = applyCountryCode('31');
+    }
+    // 8. Ireland
+    else if (loc.includes('ireland') || loc.includes('dublin') || loc.includes('cork') || loc.includes('galway')) {
+      normalized = applyCountryCode('353');
+    }
+    // 9. Sweden
+    else if (loc.includes('sweden') || loc.includes('stockholm') || loc.includes('gothenburg') || loc.includes('sverige')) {
+      normalized = applyCountryCode('46');
+    }
+    // 10. Switzerland
+    else if (loc.includes('switzerland') || loc.includes('zurich') || loc.includes('geneva') || loc.includes('schweiz')) {
+      normalized = applyCountryCode('41');
+    }
+    // 11. Spain
+    else if (loc.includes('spain') || loc.includes('madrid') || loc.includes('barcelona')) {
+      normalized = applyCountryCode('34');
+    }
+    // 12. Italy
+    else if (loc.includes('italy') || loc.includes('rome') || loc.includes('milan')) {
+      normalized = applyCountryCode('39');
+    }
+    // 13. Default/Nigeria
+    else {
+      normalized = applyCountryCode('234');
     }
   }
 
@@ -198,6 +218,8 @@ ${lead.customPitch}
       parse_mode: 'Markdown'
     });
     console.log(`✅ Telegram B2B alert sent successfully for: ${lead.name}`);
+    lead.telegramSent = true;
+    await lead.save();
   } catch (err) {
     console.error('❌ Autopilot B2B: Failed to send Telegram B2B alert:', err.response ? err.response.data : err.message);
   }
@@ -306,6 +328,59 @@ function getDynamicB2BCampaign() {
   };
 }
 
+// Helper to generate a premium, high-converting B2B outreach pitch locally for free!
+function generateLocalPitch(lead) {
+  const platformName = lead.platform || 'Google Maps';
+  const reviewsCount = lead.reviewsCount || 0;
+  const niche = lead.niche || 'business';
+  const name = lead.name || 'Business Owner';
+  const location = lead.location || 'your area';
+  
+  let attentionGrabber = `We saw your outstanding ${niche} presence in ${location}`;
+  if (reviewsCount > 5) {
+    if (platformName === 'Instagram' || platformName === 'TikTok') {
+      attentionGrabber = `We came across your highly active ${niche} profile in ${location} with ${reviewsCount} followers`;
+    } else {
+      attentionGrabber = `We saw your highly rated ${niche} listing in ${location} with ${reviewsCount} reviews`;
+    }
+  }
+
+  let bottleneckText = '';
+  const websiteStatus = lead.websiteStatus || 'Missing Website';
+  const bottlenecks = lead.bottlenecks || [];
+  
+  if (websiteStatus === 'Missing Website') {
+    bottleneckText = `We noticed you don't have a custom website listed on your page. Right now, you are relying completely on manual coordination (like phone calls or social DMs) for bookings and inquiries.`;
+  } else if (websiteStatus === 'Broken/Offline Website') {
+    bottleneckText = `We noticed that the website link listed on your profile is currently offline or broken. This is causing high-intent local clients who click to drop off immediately.`;
+  } else if (websiteStatus === 'Social-Only Catalog') {
+    bottleneckText = `We noticed you are using a basic link-in-bio or social catalog. This makes it difficult for local search engines to find you and forces customers to do manual work to book your services.`;
+  } else {
+    bottleneckText = `We noticed some digital bottlenecks in your online presentation, specifically around local search visibility and ease of customer checkout.`;
+  }
+
+  if (bottlenecks.length > 0) {
+    bottleneckText += ` This leads to ${bottlenecks.join(', ')} which costs you high-value bookings daily.`;
+  }
+
+  return `Hi ${name},
+
+${attentionGrabber}. You are doing an impressive job, but we noticed a major digital bottleneck that is costing you business:
+
+${bottleneckText}
+
+When local customers search for a ${niche} in ${location}, they expect a premium, mobile-optimized booking site where they can view your services and book instantly in 2 clicks. Without this, you are losing high-value clients directly to competitors who do have custom websites.
+
+We build premium, custom, mobile-optimized websites and automated booking catalogs tailored specifically for brands like ${name} to automate your client acquisition.
+
+Are you open to a brief 2-minute chat this week to see how we can build this for you and recover lost revenue?
+
+Sincerely,
+AkinByte Technologies Limited
+Email: Akinyemioluwaseunjunior@gmail.com
+Phone: +234 7071238658`;
+}
+
 // Core B2B Crawler and Qualifier Logic
 async function scanB2BLeads() {
   let campaign;
@@ -337,7 +412,14 @@ async function scanB2BLeads() {
     Perform a live Google Search to discover 5 real, active local businesses or creators in the category "${campaign.niche}" located in "${campaign.location}" that operate on ${campaign.platform}.
     We are looking for independent local businesses (exclude national brands/franchises/jobs). 
     CRITICAL LOCATION CONSTRAINT: Only find businesses that are actually situated in or near "${campaign.location}". Do not include businesses located in other regions, states, or cities.
-    Specifically find businesses that either have no website, a broken/offline website, or rely entirely on social media/DMs for booking or selling products (e.g. using Linktree, WhatsApp links like wa.me, or having no website link at all).
+    
+    WEBSITE AUDIT PRIORITIZATION CONSTRAINT:
+    Your primary goal is to find businesses that DO NOT have a website, have a broken/dead website link, or rely completely on social media catalogs or DMs for customer bookings (e.g., using Linktree, WhatsApp links like wa.me, or having no website listed at all). 
+    If you can only find businesses that already have websites, you MAY return them, but prioritize those with basic or poorly optimized websites, and list their specific digital bottlenecks (e.g. "No online booking," "Poor mobile catalog," "Manual DM booking," "Zero local search optimization").
+    
+    STRICT JSON FORMATTING & REFUSAL CONSTRAINT:
+    You MUST ALWAYS return your response as a valid JSON array of objects matching the schema below. 
+    Under no circumstances should you return conversational text, apologies, explanations of search difficulties, warnings, or refutations. Even if no perfect matches are found, return a valid JSON array (or an empty array \`[]\` if absolutely nothing is found). Never start your response with "I am unable", "I cannot", or any conversational disclaimer.
     
     CRITICAL LINK & INTEGRITY CONSTRAINTS:
     1. Every single business you return MUST have a real, verified, active profile URL on ${campaign.platform}.
@@ -443,46 +525,12 @@ async function scanB2BLeads() {
       });
 
       if (statusToCheck === 'Missing Website' || statusToCheck === 'Broken/Offline Website' || statusToCheck === 'Social-Only Catalog') {
-        console.log(`🤖 Autopilot B2B: Generating outreach pitch for B2B client: "${item.name}"`);
-        const pitchPrompt = `
-          You are an expert business growth consultant and professional sales copywriter.
-          Write an extremely direct, conversational, and highly persuasive outreach message addressed to "${newLead.name}".
-          The goal of this message is to capture their attention instantly. Keep the message short, punchy, and under 150 to 200 words. Avoid long essays, formal business reports, or dry documents.
-          
-          Here is the diagnostic audit data of the prospect:
-          Name: ${newLead.name}
-          Platform: ${newLead.platform}
-          Category/Niche: ${newLead.niche}
-          Location: ${newLead.location}
-          Contact: ${newLead.phone ? `Phone: ${newLead.phone}` : ''} ${newLead.email ? `Email: ${newLead.email}` : ''}
-          Social Link: ${newLead.socialUrl}
-          Website Status: ${newLead.websiteStatus || 'Missing Website'}
-          Identified Bottlenecks: ${(newLead.bottlenecks || []).join(', ') || 'No custom website, manual booking/sales'}
-          Reviews/Followers: ${newLead.reviewsCount || 0}
-          
-          OUTREACH STRUCTURE:
-          1. COMPLIMENT & ATTENTION GRABBER: Start by complimenting their impressive presence or customer feedback (e.g. "We saw your highly rated ${newLead.niche} profile in ${newLead.location} with ${newLead.reviewsCount} reviews...").
-          2. THE PROBLEM & LOSS: Directly but politely highlight their core digital operational bottleneck. Clearly articulate what they are losing because of this.
-          3. THE SOLUTION & CALL TO ACTION: Propose building a premium, custom mobile-optimized website and booking catalog designed specifically for their brand to automate client acquisition and recovery. Ask if they are open to a brief 2-minute chat this week to discuss how we can implement this.
-          
-          STRICT CONTROLS:
-          - Keep it short, conversational, and direct. NO long blocks of formal proposal text.
-          - Do NOT use any emojis, smileys, or icons.
-          - Do NOT claim, suggest, or imply that we have already built a mockup, website, preview, or catalog for them.
-          - Do not include brackets, placeholders, or template tags in the final proposal text.
-          - Sign off formally as:
-            Sincerely,
-            AkinByte Technologies Limited
-            Email: Akinyemioluwaseunjunior@gmail.com
-            Phone: +234 7071238658
-        `;
-        
+        console.log(`🤖 Autopilot B2B: Generating outreach pitch for B2B client locally: "${item.name}"`);
         try {
-          const pitchText = await generateGeminiGrounded(pitchPrompt);
-          newLead.customPitch = pitchText;
+          newLead.customPitch = generateLocalPitch(newLead);
           newLead.status = 'pitch-ready';
         } catch (err) {
-          console.error(`❌ Autopilot B2B: Pitch generation failed for ${newLead.name}:`, err.message);
+          console.error(`❌ Autopilot B2B: Pitch generation failed locally for ${newLead.name}:`, err.message);
         }
       }
 
@@ -787,13 +835,13 @@ function startAgent() {
     return;
   }
 
-  console.log('🚀 Autopilot: Starting background agent (Interval: 15 minutes)...');
+  console.log('🚀 Autopilot: Starting background agent (Interval: 2 hours)...');
   
   // Run immediately on start, then schedule
   runAllScans().catch(err => console.error('❌ Autopilot: Initial scan failed:', err));
 
-  // Schedule task every 15 minutes
-  activeCronTask = cron.schedule('*/15 * * * *', async () => {
+  // Schedule task every 2 hours
+  activeCronTask = cron.schedule('0 */2 * * *', async () => {
     console.log('⏰ Autopilot: Triggering scheduled scan...');
     try {
       const config = await SystemConfig.findOne({ key: 'autopilot_active' });
@@ -841,5 +889,6 @@ module.exports = {
   startAgent,
   stopAgent,
   initAutopilotOnStartup,
-  runAllScans // Export for manual triggers
+  runAllScans, // Export for manual triggers
+  sendTelegramB2BAlert // Export for manual Telegram pushes
 };
